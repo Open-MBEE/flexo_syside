@@ -116,7 +116,8 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
         with open(json_out_path, "w", encoding="utf-8") as f:
             f.write(json_string)
     
-    return _wrap_elements_as_payload(json_string)
+    data = json.loads(json_string)
+    return _wrap_elements_as_payload(data)
 
 def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None) ->str:
     MODEL_FILE_PATH = sysml_out_path
@@ -166,29 +167,5 @@ def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None) ->s
     return sysml_text, deserialized_model
 
 
-def find_integer_attribute_values(element: syside.Element, level: int = 0) -> None:
 
-    if element.try_cast(syside.AttributeUsage):
-        attr  = element.cast(syside.AttributeUsage)
-        expression_a1 = attr.owned_elements[0]
-        if isinstance(expression_a1, syside.LiteralInteger):
-            print(f"{attr.declared_name}: {expression_a1.value}")
-    
-    element.owned_elements.for_each(
-        lambda owned_element: find_integer_attribute_values(owned_element, level + 1)
-    )
 
-def find_expression_attribute_values(element: syside.Element, level: int = 0) -> None:
-
-    if element.try_cast(syside.AttributeUsage):
-        attr  = element.cast(syside.AttributeUsage)
-        expression_a1 = attr.owned_elements[0]
-        if isinstance(expression_a1, syside.Expression):
-            compiler = syside.Compiler()
-            result, report = compiler.evaluate(expression_a1)
-            assert not report.fatal, report.diagnostics
-            print(f"{attr.declared_name}: {result}")
-
-    element.owned_elements.for_each(
-        lambda owned_element: find_expression_attribute_values(owned_element, level + 1)
-    )

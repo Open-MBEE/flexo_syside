@@ -1,0 +1,2 @@
+git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
+requests

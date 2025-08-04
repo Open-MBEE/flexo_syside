@@ -1,11 +1,17 @@
 # flexo_syside
 
-A short description.
+This repository provide a SysIDE based library to serialize SysMLv2 textual notatation as file or string so, it can
+be committed to OpenMBEE Flexo SysML v2 repository.
+It also provides functions to deserialiize Flexo respomses in JSON to SySIDE python objects, that are then accessible by API or SysML v2 textual notation.
+
+Look at examples/basic_notebook.ipynb for how to use the API
 
 ## Installation
 
 ```bash
 pip install .
+
+Check requirements.txt for dependencies
 
 ## Installation
 

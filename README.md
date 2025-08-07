@@ -6,6 +6,14 @@ It also provides functions to deserialiize Flexo respomses in JSON to SySIDE pyt
 
 Look at examples/basic_notebook.ipynb for how to use the API
 
+It uses [SysML v2 Python client][https://github.com/Open-MBEE/sysmlv2-python-client] to access SysML v2 models with the standard API and has been tested
+with [OpenMBEE Flexo][https://openmbee.atlassian.net/wiki/x/AYAeEw]
+
+You can install Flexo easily yourself using docker compose:
+[Flexo MMS SysML v2 Microservice][https://github.com/Open-MBEE/flexo-mms-sysmlv2/tree/develop/docker-compose]
+[Flexo MMS docker-compose][https://github.com/Open-MBEE/flexo-mms-deployment/tree/develop/docker-compose]
+
+
 ## Installation
 
 ```bash

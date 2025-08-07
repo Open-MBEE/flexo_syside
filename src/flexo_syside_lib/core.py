@@ -10,6 +10,14 @@ import pathlib
 import os
 import ast
 
+def _replace_none_with_empty(obj):
+    if isinstance(obj, dict):
+        return {k: _replace_none_with_empty(v) if v is not None else "" for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_replace_none_with_empty(x) for x in obj]
+    else:
+        return obj
+
 
 def _remove_uri_fields(obj: Any) -> Any:
     """Recursively remove all @uri fields from a nested JSON-like structure."""
@@ -31,29 +39,12 @@ def _wrap_elements_as_payload(data: List[Dict[str, Any]]) -> List[Dict[str, Any]
     transformed = []
 
     for element in data:
-        clean_element = _remove_uri_fields(element.copy())
+        # some elements have null as value, such as qualified_name. Flexo has currently a bug that causes an exception
+        element_no_none = _replace_none_with_empty(element)
+        clean_element = _remove_uri_fields(element_no_none.copy())
 
         # Add identity
         identity = {"@id": clean_element.get("@id")} if "@id" in clean_element else {}
-
-        # Optional: fill defaults
-        # defaults = {
-        #     "ownedFeature": [],
-        #     "ownedMember": [],
-        #     "usage": [],
-        #     "feature": [],
-        #     "member": [],
-        #     "ownedRelationship": [],
-        #     "membership": [],
-        #     "inheritedMembership": [],
-        #     "ownedMembership": [],
-        #     "isImpliedIncluded": False,
-        #     "isVariation": False,
-        #     "isSufficient": False,
-        #     "isLibraryElement": False
-        # }
-        # for key, value in defaults.items():
-        #     clean_element.setdefault(key, value)
 
         transformed.append({
             "payload": clean_element,
@@ -79,19 +70,34 @@ def _model_to_json (model:syside.Model):
     # Export the model to JSON
     assert len(model.user_docs) == 1
 
-    #use this for a more complete serialization
-    sopt = syside.SerializationOptions (use_standard_names = True,
-                                include_derived = True, 
-                                include_redefined = True, 
-                                include_default = True, 
-                                include_optional = True, 
-                                include_implied = True)
+    writer = _create_json_writer()
+    options =_create_serialization_options()
 
     with model.user_docs[0].lock() as locked:
-        json_string =  syside.json.dumps(locked.root_node, syside.SerializationOptions.minimal())
-    #     json_string =  syside.json.dumps(locked.root_node, sopt)
+        syside.serialize(locked.root_node, writer, options)
+        json_string = writer.result
 
     return json_string
+
+def _create_json_writer() -> syside.JsonStringWriter:
+    json_options = syside.JsonStringOptions()
+    json_options.include_cross_ref_uris = False
+    json_options.indent = False
+    writer = syside.JsonStringWriter(json_options)
+    return writer
+
+def _create_serialization_options() -> syside.SerializationOptions:
+    options = syside.SerializationOptions()
+    options = options.with_options(
+        use_standard_names=True,
+        include_derived=True,
+        include_redefined=True,
+        include_default=False,
+        include_optional=False,
+        include_implied=True,
+    )
+    options.fail_action = syside.FailAction.Ignore
+    return options
 
 def convert_sysml_file_textual_to_json(sysml_file_path:str, json_out_path:str = None) -> str:
     # load sysml textual notation and create json dump

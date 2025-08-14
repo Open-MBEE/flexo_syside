@@ -30,5 +30,5 @@ It also depends on sysIDE automator library: https://sensmetry.com/syside/
 ### Recommended install (development or production):
 
 ```bash
-pip install -r requirements.txt --extra-index-url https://gitlab.com/api/v4/projects/69960816/packages/pypi/simple
+pip install syside-license syside --index-url https://gitlab.com/api/v4/projects/69960816/packages/pypi/simple --upgrade
 pip install -e .

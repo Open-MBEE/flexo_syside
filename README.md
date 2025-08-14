@@ -4,18 +4,18 @@ This repository provide a SysIDE based library to serialize SysMLv2 textual nota
 be committed to OpenMBEE Flexo SysML v2 repository.
 It also provides functions to deserialiize Flexo respomses in JSON to SySIDE python objects, that are then accessible by API or SysML v2 textual notation.
 
-Contributed by [Planetary Utilities Corp][https://www.planetaryutilities.com/]
+Contributed by [Planetary Utilities Corp](https://www.planetaryutilities.com/)
 
 ## Overview
 
 Look at examples/basic_notebook.ipynb for how to use the API
 
-It uses [SysML v2 Python client][https://github.com/Open-MBEE/sysmlv2-python-client] to access SysML v2 models with the standard API and has been tested
-with [OpenMBEE Flexo][https://openmbee.atlassian.net/wiki/x/AYAeEw]
+It uses [SysML v2 Python client](https://github.com/Open-MBEE/sysmlv2-python-client] to access SysML v2 models with the standard API and has been tested
+with [OpenMBEE Flexo](https://openmbee.atlassian.net/wiki/x/AYAeEw)
 
 You can install Flexo easily yourself using docker compose:
-[Flexo MMS SysML v2 Microservice][https://github.com/Open-MBEE/flexo-mms-sysmlv2/tree/develop/docker-compose]
-[Flexo MMS docker-compose][https://github.com/Open-MBEE/flexo-mms-deployment/tree/develop/docker-compose]
+[Flexo MMS SysML v2 Microservice](https://github.com/Open-MBEE/flexo-mms-sysmlv2/tree/develop/docker-compose)
+[Flexo MMS docker-compose](https://github.com/Open-MBEE/flexo-mms-deployment/tree/develop/docker-compose)
 
 
 ## Installation

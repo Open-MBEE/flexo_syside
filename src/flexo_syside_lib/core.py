@@ -3,7 +3,8 @@ from pathlib import Path
 
 
 from sysmlv2_client import SysMLV2Client, SysMLV2Error, SysMLV2NotFoundError
-from .utils import clean_sysml_json_for_syside, print_serde_report
+from .utils import clean_sysml_json_for_syside
+from .utils2 import print_serde_report
 import json 
 from pprint import pprint
 
@@ -138,7 +139,7 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
     data = json.loads(json_string)
     return _wrap_elements_as_payload(data)
 
-def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None) ->str:
+def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None, debug:bool=False) ->str:
     MODEL_FILE_PATH = sysml_out_path
     if sysml_out_path is None:
         EXAMPLE_DIR = pathlib.Path(os.getcwd())
@@ -157,7 +158,7 @@ def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None) ->s
         raise TypeError(f"json_flexo must be dict/list/str, got {type(json_flexo).__name__}")
 
     # 1) Clean dangling refs & incomplete relationships → JSON string out
-    json_clean = clean_sysml_json_for_syside(json_in, preserve_refs_with_uri=True)
+    json_clean = clean_sysml_json_for_syside(json_in, preserve_refs_with_uri=True, debug=debug)
 
     # 2) Ensure root namespace is first (this function expects a JSON string)
     json_import = _make_root_namespace_first(json_clean)

@@ -122,7 +122,7 @@ def convert_sysml_file_textual_to_json(sysml_file_path:str, json_out_path:str = 
             f.write(json_string)
 
     data = json.loads(json_string)
-    return _wrap_elements_as_payload(data)
+    return _wrap_elements_as_payload(data), json_string
 
 def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:str = None, minimal:bool=False) -> str:
     model, diagnostics = syside.load_model(sysml_source=sysml_model_string)

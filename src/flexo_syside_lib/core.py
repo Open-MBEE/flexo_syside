@@ -63,7 +63,6 @@ def _make_root_namespace_first(json_str: str) -> str:
     found_root_namespace = None
     for i, element in enumerate(obj):
         if element["@type"] == "Namespace" and "owningRelationship" not in element:
-            assert found_root_namespace is None
             found_root_namespace = i
     if found_root_namespace is not None:
         obj.insert(0, obj.pop(found_root_namespace))

@@ -71,6 +71,26 @@ def _make_root_namespace_first(json_str: str) -> str:
         raise ValueError("No root namespace found")
     return json.dumps(obj)
 
+def _create_json_writer() -> syside.JsonStringWriter:
+    json_options = syside.JsonStringOptions()
+    json_options.include_cross_ref_uris = False
+    json_options.indent = False
+    writer = syside.JsonStringWriter(json_options)
+    return writer
+
+def _create_serialization_options() -> syside.SerializationOptions:
+    options = syside.SerializationOptions().minimal().with_options(
+        use_standard_names=True,
+        include_derived=True,
+        include_redefined=True,
+        include_default=False,
+        include_optional=False,
+        include_implied=True,
+    )
+    options.fail_action = syside.FailAction.Ignore
+    
+    return options
+
 def _model_to_json (model:syside.Model, minimal:bool=False):
     # Export the model to JSON
     assert len(model.user_docs) == 1
@@ -87,30 +107,10 @@ def _model_to_json (model:syside.Model, minimal:bool=False):
 
     return json_string
 
-def _create_json_writer() -> syside.JsonStringWriter:
-    json_options = syside.JsonStringOptions()
-    json_options.include_cross_ref_uris = False
-    json_options.indent = False
-    writer = syside.JsonStringWriter(json_options)
-    return writer
-
-def _create_serialization_options() -> syside.SerializationOptions:
-    options = syside.SerializationOptions()
-    options = options.with_options(
-        use_standard_names=True,
-        include_derived=True,
-        include_redefined=True,
-        include_default=False,
-        include_optional=False,
-        include_implied=True,
-    )
-    options.fail_action = syside.FailAction.Ignore
-    
-    return options
 
 def convert_sysml_file_textual_to_json(sysml_file_path:str, json_out_path:str = None, minimal:bool=False) -> str:
     # load sysml textual notation and create json dump
-    (model, diagnostics) = syside.try_load_model([sysml_file_path])
+    model, diagnostics = syside.try_load_model([sysml_file_path])
 
     # Only errors cause an exception. SysIDE may also report warnings and
     # informational messages
@@ -137,18 +137,9 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
             f.write(json_string)
     
     data = json.loads(json_string)
-    return _wrap_elements_as_payload(data)
+    return _wrap_elements_as_payload(data), json_string
 
-def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None, debug:bool=False) ->str:
-    MODEL_FILE_PATH = sysml_out_path
-    if sysml_out_path is None:
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / "import.sysml"
-    # The deserialized model will be stored in a document with MODEL_PATH path.
-    # The MODEL_PATH does not necessarily need to exist on the local file system.
-    # gives a valid file URI regardless of platform
-    MODEL_PATH = MODEL_FILE_PATH.as_uri()
-
+def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False) ->str:
     # Normalize input to a JSON string (no double-encoding!)
     if isinstance(json_flexo, (dict, list)):
         json_in = json.dumps(json_flexo, ensure_ascii=False)
@@ -165,7 +156,7 @@ def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None, deb
 
     # 3) Deserialize
     try:
-        deserialized_model, model_doc = syside.json.loads(json_import, MODEL_PATH)
+        deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
     except Exception as exc:
         # Try to catch the specific syside error type first
         try:
@@ -193,28 +184,45 @@ def convert_json_to_sysml_textual(json_flexo:str, sysml_out_path:str = None, deb
             # Not a syside deserialization error; re-raise (or handle differently)
             raise
 
-    # Create an environment to have access to stdlib docs
-    # If you have exported the stdlib to JSON as well, you do not need this
-    # environment. However, currently we have a bug that prevents us from
-    # loading the stdlib from JSON.
-    default_env = syside.Environment.get_default()
-    stdlib_docs = default_env.documents
 
     # Create an IdMap that will be used to link deserialized models together
     map = syside.IdMap()
 
-    # Add stdlib docs to the IdMap
-    # This part is not needed if you have exported the stdlib to JSON as well.
-    for doc in stdlib_docs:
-        with doc.lock() as locked:
-            map.insert_or_assign(locked)
+    # Create an environment to have access to stdlib docs
+    # If you have exported the stdlib to JSON as well, you do not need this
+    # environment. However, currently we have a bug that prevents us from
+    # loading the stdlib from JSON.
+    for mutex in syside.Environment.get_default().documents:
+        with mutex.lock() as dep:
+            map.insert_or_assign(dep)
 
-    # Add deserialized JSON docs to the map
-    with model_doc.lock() as locked:
-        map.insert_or_assign(locked)
+    try:
+        report, success = deserialized_model.link(map)
+    except Exception as exc:
+        try:
+            from syside.core import DeserializationError  # or here, depending on version
+        except Exception:
+            DeserializationError = type(None)  # fallback so isinstance won't match
 
-    deserialized_model.link(map)
+        if isinstance(exc, DeserializationError):
+            # Many versions set these as attributes...
+            report = getattr(exc, "report", None)
+            model = getattr(exc, "model", None)
 
+            # ...but they are always present in .args as a fallback
+            if report is None and getattr(exc, "args", None):
+                if len(exc.args) >= 2:
+                    model = exc.args[0]
+                    report = exc.args[1]
+
+            print("Deserialization failed. Diagnostic report:")
+            print_serde_report(report)
+        else:
+            # Not a syside deserialization error; re-raise (or handle differently)
+            raise
+        
+#    assert success, str(report.messages)
+ 
     # Save the deserialized model to a file
     root_namespace = deserialized_model.document.root_node
     printer_cfg = syside.PrinterConfig(line_width=80, tab_width=2)

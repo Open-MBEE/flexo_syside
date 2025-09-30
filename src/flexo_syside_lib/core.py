@@ -1,6 +1,6 @@
 import syside
 from pathlib import Path
-
+from datetime import datetime, timezone
 
 from sysmlv2_client import SysMLV2Client, SysMLV2Error, SysMLV2NotFoundError
 from .utils import clean_sysml_json_for_syside
@@ -61,9 +61,17 @@ def _wrap_elements_as_payload(data: List[Dict[str, Any]]) -> List[Dict[str, Any]
 def _make_root_namespace_first(json_str: str) -> str:
     obj = json.loads(json_str)
     found_root_namespace = None
+    timestamp = datetime.fromisoformat("1970-01-01T12:00:00+00:00")
     for i, element in enumerate(obj):
         if element["@type"] == "Namespace" and "owningRelationship" not in element:
-            found_root_namespace = i
+            current = element.get("qualifiedName", None)
+            if current is None:
+                found_root_namespace = i
+                break
+            current_dt = datetime.fromisoformat(current.replace("Z", "+00:00"))
+            if current_dt > timestamp:
+                timestamp = current_dt
+                found_root_namespace = i
     if found_root_namespace is not None:
         obj.insert(0, obj.pop(found_root_namespace))
     else:
@@ -104,7 +112,16 @@ def _model_to_json (model:syside.Model, minimal:bool=False):
         syside.serialize(locked.root_node, writer, options)
         json_string = writer.result
 
-    return json_string
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    obj = json.loads(json_string)
+    for element in obj:
+        if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+            element["qualifiedName"] = now_str   # set the value here
+            print(element)
+            break
+            
+    return json.dumps(obj, indent=2)
 
 
 def convert_sysml_file_textual_to_json(sysml_file_path:str, json_out_path:str = None, minimal:bool=False) -> str:

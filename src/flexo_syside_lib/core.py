@@ -46,7 +46,7 @@ def _wrap_elements_as_payload(data: List[Dict[str, Any]]) -> List[Dict[str, Any]
     for element in data:
         # some elements have null as value, such as qualified_name. Flexo has currently a bug that causes an exception
         element_no_none = _replace_none_with_empty(element)
-        clean_element = _remove_uri_fields(element_no_none.copy())
+        clean_element = element_no_none
 
         # Add identity
         identity = {"@id": clean_element.get("@id")} if "@id" in clean_element else {}
@@ -165,10 +165,10 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False) ->str:
         raise TypeError(f"json_flexo must be dict/list/str, got {type(json_flexo).__name__}")
 
     # 1) Clean dangling refs & incomplete relationships → JSON string out
-    json_clean = clean_sysml_json_for_syside(json_in, preserve_refs_with_uri=True, debug=debug)
+    #json_clean = clean_sysml_json_for_syside(json_in, preserve_refs_with_uri=True, debug=debug)
 
     # 2) Ensure root namespace is first (this function expects a JSON string)
-    json_import = _make_root_namespace_first(json_clean)
+    json_import = _make_root_namespace_first(json_in)
 
     # 3) Deserialize
     try:

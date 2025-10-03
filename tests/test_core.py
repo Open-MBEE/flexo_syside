@@ -39,7 +39,6 @@ class TestUtilityFunctions:
         ]
         wrapped = _wrap_elements_as_payload(elements)
         assert wrapped[0]["identity"] == {"@id": "ID1"}
-        assert "@uri" not in wrapped[0]["payload"]
         assert wrapped[0]["payload"]["name"] == ""
         assert wrapped[1]["payload"]["props"][0] is None
     

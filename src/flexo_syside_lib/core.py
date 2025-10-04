@@ -118,7 +118,7 @@ def _model_to_json (model:syside.Model, minimal:bool=False):
     for element in obj:
         if element.get("@type") == "Namespace" and "owningRelationship" not in element:
             element["qualifiedName"] = now_str   # set the value here
-            print(element)
+            #print(element)
             break
             
     return json.dumps(obj, indent=2)
@@ -155,51 +155,65 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
     data = json.loads(json_string)
     return _wrap_elements_as_payload(data), json_string
 
+import warnings
+
 def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False) ->str:
-    # Normalize input to a JSON string (no double-encoding!)
-    if isinstance(json_flexo, (dict, list)):
-        json_in = json.dumps(json_flexo, ensure_ascii=False)
-    elif isinstance(json_flexo, str):
-        json_in = json_flexo
-    else:
-        raise TypeError(f"json_flexo must be dict/list/str, got {type(json_flexo).__name__}")
+    captured_warnings = []
 
-    # 1) Clean dangling refs & incomplete relationships → JSON string out
-    #json_clean = clean_sysml_json_for_syside(json_in, preserve_refs_with_uri=True, debug=debug)
+    with warnings.catch_warnings(record=True) as wlist:
+        warnings.simplefilter("always")  # capture all warnings
 
-    # 2) Ensure root namespace is first (this function expects a JSON string)
-    json_import = _make_root_namespace_first(json_in)
-
-    # 3) Deserialize
-    try:
-        deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
-    except Exception as exc:
-        # Try to catch the specific syside error type first
-        try:
-            from syside.json import DeserializationError  # sometimes exported here
-        except Exception:
-            try:
-                from syside.core import DeserializationError  # or here, depending on version
-            except Exception:
-                DeserializationError = type(None)  # fallback so isinstance won't match
-
-        if isinstance(exc, DeserializationError):
-            # Many versions set these as attributes...
-            report = getattr(exc, "report", None)
-            model = getattr(exc, "model", None)
-
-            # ...but they are always present in .args as a fallback
-            if report is None and getattr(exc, "args", None):
-                if len(exc.args) >= 2:
-                    model = exc.args[0]
-                    report = exc.args[1]
-
-            print("Deserialization failed. Diagnostic report:")
-            print_serde_report(report)
+        # Normalize input to a JSON string (no double-encoding!)
+        if isinstance(json_flexo, (dict, list)):
+            json_in = json.dumps(json_flexo, ensure_ascii=False)
+        elif isinstance(json_flexo, str):
+            json_in = json_flexo
         else:
-            # Not a syside deserialization error; re-raise (or handle differently)
-            raise
+            raise TypeError(f"json_flexo must be dict/list/str, got {type(json_flexo).__name__}")
 
+        # 1) Clean dangling refs & incomplete relationships → JSON string out
+        #json_clean = clean_sysml_json_for_syside(json_in, preserve_refs_with_uri=True, debug=debug)
+
+        # 2) Ensure root namespace is first (this function expects a JSON string)
+        json_import = _make_root_namespace_first(json_in)
+
+        # 3) Deserialize
+        try:
+            deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
+        except Exception as exc:
+            # Try to catch the specific syside error type first
+            try:
+                from syside.json import DeserializationError  # sometimes exported here
+            except Exception:
+                try:
+                    from syside.core import DeserializationError  # or here, depending on version
+                except Exception:
+                    DeserializationError = type(None)  # fallback so isinstance won't match
+
+            if isinstance(exc, DeserializationError):
+                # Many versions set these as attributes...
+                report = getattr(exc, "report", None)
+                model = getattr(exc, "model", None)
+
+                # ...but they are always present in .args as a fallback
+                if report is None and getattr(exc, "args", None):
+                    if len(exc.args) >= 2:
+                        model = exc.args[0]
+                        report = exc.args[1]
+
+                print("Deserialization failed. Diagnostic report:")
+                print_serde_report(report)
+
+                captured_warnings.append(f"Deserialization failed: {report}")
+                return None, captured_warnings
+            else:
+                # Not a syside deserialization error; re-raise (or handle differently)
+                raise
+
+
+        # Collect warnings from this phase
+        for w in wlist:
+            captured_warnings.append(str(w.message))
 
     # Create an IdMap that will be used to link deserialized models together
     map = syside.IdMap()
@@ -245,5 +259,5 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False) ->str:
     printer = syside.ModelPrinter.sysml()
     sysml_text = syside.pprint(root_namespace, printer, printer_cfg)
 
-    return sysml_text, deserialized_model
+    return (sysml_text, deserialized_model), captured_warnings
 

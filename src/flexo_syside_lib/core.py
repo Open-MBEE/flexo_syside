@@ -201,9 +201,6 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
                         model = exc.args[0]
                         report = exc.args[1]
 
-                print("Deserialization failed. Diagnostic report:")
-                print_serde_report(report)
-
                 captured_warnings.append(f"Deserialization failed: {report}")
                 return None, captured_warnings
             else:

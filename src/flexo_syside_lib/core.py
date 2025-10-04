@@ -157,7 +157,7 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
 
 import warnings
 
-def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False) ->str:
+def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
     captured_warnings = []
 
     with warnings.catch_warnings(record=True) as wlist:

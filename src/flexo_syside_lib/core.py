@@ -60,23 +60,49 @@ def _wrap_elements_as_payload(data: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
 def _make_root_namespace_first(json_str: str) -> str:
     obj = json.loads(json_str)
+
     found_root_namespace = None
     timestamp = datetime.fromisoformat("1970-01-01T12:00:00+00:00")
-    for i, element in enumerate(obj):
-        if element["@type"] == "Namespace" and "owningRelationship" not in element:
-            current = element.get("qualifiedName", None)
-            if current is None:
-                found_root_namespace = i
-                break
-            current_dt = datetime.fromisoformat(current.replace("Z", "+00:00"))
-            if current_dt > timestamp:
-                timestamp = current_dt
-                found_root_namespace = i
+
+    def empty_to_none_and_search(element, index=None):
+        nonlocal found_root_namespace, timestamp
+
+        # Replace empty strings with None recursively
+        if isinstance(element, dict):
+            # detect root namespace while walking
+            if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+                current = element.get("qualifiedName", None)
+                if current is None:
+                    found_root_namespace = index
+                else:
+                    try:
+                        current_dt = datetime.fromisoformat(current.replace("Z", "+00:00"))
+                        if current_dt > timestamp:
+                            timestamp = current_dt
+                            found_root_namespace = index
+                    except Exception:
+                        pass  # ignore malformed dates
+
+            return {k: empty_to_none_and_search(v) for k, v in element.items()}
+
+        elif isinstance(element, list):
+            return [empty_to_none_and_search(v, i) for i, v in enumerate(element)]
+
+        elif element == "":
+            return None
+
+        else:
+            return element
+
+    obj = [empty_to_none_and_search(e, i) for i, e in enumerate(obj)]
+
     if found_root_namespace is not None:
         obj.insert(0, obj.pop(found_root_namespace))
     else:
         raise ValueError("No root namespace found")
+
     return json.dumps(obj)
+
 
 def _create_json_writer() -> syside.JsonStringWriter:
     json_options = syside.JsonStringOptions()

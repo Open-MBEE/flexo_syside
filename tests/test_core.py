@@ -33,7 +33,7 @@ class TestUtilityFunctions:
         from flexo_syside_lib.core import _wrap_elements_as_payload
         
         elements = [
-            {"@id": "ID1", "@uri": "ignore", "name": None},
+            {"@id": "ID1", "name": None},
             {"name": "X", "props": [None, 1]},
         ]
         wrapped = _wrap_elements_as_payload(elements)

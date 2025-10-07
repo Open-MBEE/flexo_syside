@@ -38,10 +38,23 @@ class TestUtilityFunctions:
             {"name": "X", "props": [None, 1]},
         ]
         wrapped = _wrap_elements_as_payload(elements)
-        assert wrapped[0]["identity"] == {"@id": "ID1"}
+        # check wrapper structure
+        assert isinstance(wrapped, list)
+        assert all("payload" in e for e in wrapped)
+
+        # identity should now be inside payload
+        assert wrapped[0]["payload"]["identity"] == {"@id": "ID1"}
+
+        # @uri should be removed
+        assert "@uri" not in wrapped[0]["payload"]
+
+        # None should become "" in name
         assert wrapped[0]["payload"]["name"] == ""
+
+        # props should remain list with None preserved
         assert wrapped[1]["payload"]["props"][0] is None
-    
+        assert wrapped[1]["payload"]["props"][1] == 1    
+        
     def test_make_root_namespace_first(self):
         """Test the _make_root_namespace_first utility function."""
         from flexo_syside_lib.core import _make_root_namespace_first

@@ -50,11 +50,9 @@ def _wrap_elements_as_payload(data: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
         # Add identity
         identity = {"@id": clean_element.get("@id")} if "@id" in clean_element else {}
+        clean_element["identity"] = identity
 
-        transformed.append({
-            "payload": clean_element,
-            "identity": identity
-        })
+        transformed.append({"payload": clean_element})
 
     return transformed
 

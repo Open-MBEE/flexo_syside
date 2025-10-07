@@ -14,7 +14,6 @@ class TestUtilityFunctions:
     
     def test_replace_none_with_empty(self):
         """Test the _replace_none_with_empty utility function."""
-        # Import here to ensure license is set up
         from flexo_syside_lib.core import _replace_none_with_empty
         
         data = {"a": None, "b": [1, None, {"c": None}]}
@@ -54,7 +53,7 @@ class TestUtilityFunctions:
         # props should remain list with None preserved
         assert wrapped[1]["payload"]["props"][0] is None
         assert wrapped[1]["payload"]["props"][1] == 1    
-        
+    
     def test_make_root_namespace_first(self):
         """Test the _make_root_namespace_first utility function."""
         from flexo_syside_lib.core import _make_root_namespace_first
@@ -106,7 +105,6 @@ class TestSysIDEIntegration:
         """Test converting SysML string to JSON with mocked SysIDE."""
         from flexo_syside_lib.core import convert_sysml_string_textual_to_json
         
-        # Sample SysML content
         sample_sysml = '''
         package TestPackage {
             part def Component {
@@ -115,19 +113,16 @@ class TestSysIDEIntegration:
         }
         '''
         
-        # Sample JSON data
         sample_json = [
             {"@id": "ns1", "@type": "Namespace", "qualifiedName": "2020-01-01T00:00:00Z"},
             {"@id": "comp1", "@type": "Component", "name": "TestComponent"},
         ]
         
-        # Mock SysIDE components
         mock_model = Mock()
         mock_diagnostics = Mock()
         mock_diagnostics.contains_errors.return_value = False
         mock_syside.load_model.return_value = (mock_model, mock_diagnostics)
         
-        # Mock the model serialization
         mock_model.user_docs = [Mock()]
         mock_locked = Mock()
         mock_locked.root_node = Mock()
@@ -136,11 +131,8 @@ class TestSysIDEIntegration:
         mock_context_manager.__exit__ = Mock(return_value=None)
         mock_model.user_docs[0].lock.return_value = mock_context_manager
         
-        # Mock JSON writer
         mock_writer = Mock()
         mock_writer.result = json.dumps(sample_json)
-        
-        # Mock serialization options
         mock_options = Mock()
         
         with patch('flexo_syside_lib.core._create_json_writer', return_value=mock_writer), \
@@ -149,18 +141,16 @@ class TestSysIDEIntegration:
             
             payload, json_string = convert_sysml_string_textual_to_json(sample_sysml)
             
-            # Verify we get a payload structure
             assert isinstance(payload, list)
             assert len(payload) > 0
             
-            # Verify payload structure
+            # Verify payload structure (updated)
             for item in payload:
                 assert "payload" in item
-                assert "identity" in item
+                assert "identity" in item["payload"]
                 assert isinstance(item["payload"], dict)
-                assert isinstance(item["identity"], dict)
+                assert isinstance(item["payload"]["identity"], dict)
             
-            # Verify JSON string is valid
             parsed_json = json.loads(json_string)
             assert isinstance(parsed_json, list)
             assert len(parsed_json) > 0
@@ -170,7 +160,6 @@ class TestSysIDEIntegration:
         """Test converting SysML file to JSON with mocked SysIDE."""
         from flexo_syside_lib.core import convert_sysml_file_textual_to_json
         
-        # Sample SysML content
         sample_sysml = '''
         package TestPackage {
             part def Component {
@@ -179,19 +168,16 @@ class TestSysIDEIntegration:
         }
         '''
         
-        # Sample JSON data
         sample_json = [
             {"@id": "ns1", "@type": "Namespace", "qualifiedName": "2020-01-01T00:00:00Z"},
             {"@id": "comp1", "@type": "Component", "name": "TestComponent"},
         ]
         
-        # Mock SysIDE components
         mock_model = Mock()
         mock_diagnostics = Mock()
         mock_diagnostics.contains_errors.return_value = False
         mock_syside.try_load_model.return_value = (mock_model, mock_diagnostics)
         
-        # Mock the model serialization
         mock_model.user_docs = [Mock()]
         mock_locked = Mock()
         mock_locked.root_node = Mock()
@@ -200,11 +186,8 @@ class TestSysIDEIntegration:
         mock_context_manager.__exit__ = Mock(return_value=None)
         mock_model.user_docs[0].lock.return_value = mock_context_manager
         
-        # Mock JSON writer
         mock_writer = Mock()
         mock_writer.result = json.dumps(sample_json)
-        
-        # Mock serialization options
         mock_options = Mock()
         
         with patch('flexo_syside_lib.core._create_json_writer', return_value=mock_writer), \
@@ -218,18 +201,16 @@ class TestSysIDEIntegration:
             try:
                 payload, json_string = convert_sysml_file_textual_to_json(temp_file)
                 
-                # Verify we get a payload structure
                 assert isinstance(payload, list)
                 assert len(payload) > 0
                 
-                # Verify payload structure
+                # Verify payload structure (updated)
                 for item in payload:
                     assert "payload" in item
-                    assert "identity" in item
+                    assert "identity" in item["payload"]
                     assert isinstance(item["payload"], dict)
-                    assert isinstance(item["identity"], dict)
+                    assert isinstance(item["payload"]["identity"], dict)
                 
-                # Verify JSON string is valid
                 parsed_json = json.loads(json_string)
                 assert isinstance(parsed_json, list)
                 assert len(parsed_json) > 0
@@ -242,7 +223,7 @@ class TestSysIDEIntegration:
         from flexo_syside_lib.core import convert_json_to_sysml_textual
         
         with pytest.raises(TypeError, match="json_flexo must be dict/list/str"):
-            convert_json_to_sysml_textual(123)  # Invalid type
+            convert_json_to_sysml_textual(123)
     
     @patch('flexo_syside_lib.core.syside')
     def test_create_json_writer(self, mock_syside):
@@ -279,15 +260,10 @@ class TestLicenseHandling:
     
     def test_import_without_license_graceful_failure(self):
         """Test that import fails gracefully when no license is available."""
-        # This test verifies that the import behavior is predictable
-        # In CI, we'll mock syside to avoid license issues
         pass
     
     def test_utility_functions_work_without_syside(self):
         """Test that utility functions work even if SysIDE is mocked."""
-        # This test ensures our utility functions are truly independent
         from flexo_syside_lib.core import _replace_none_with_empty
-        
-        # Test that the function works regardless of SysIDE state
         result = _replace_none_with_empty({"test": None})
         assert result == {"test": ""}

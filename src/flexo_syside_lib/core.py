@@ -50,9 +50,11 @@ def _wrap_elements_as_payload(data: List[Dict[str, Any]]) -> List[Dict[str, Any]
 
         # Add identity
         identity = {"@id": clean_element.get("@id")} if "@id" in clean_element else {}
-        clean_element["identity"] = identity
 
-        transformed.append({"payload": clean_element})
+        transformed.append({
+            "payload": clean_element,
+            "identity": identity
+        })
 
     return transformed
 
@@ -200,6 +202,8 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
 
         # 2) Ensure root namespace is first (this function expects a JSON string)
         json_import = _make_root_namespace_first(json_in)
+        # with open("debug.json", "w", encoding="utf-8") as f:
+        #     f.write(json_import)
 
         # 3) Deserialize
         try:

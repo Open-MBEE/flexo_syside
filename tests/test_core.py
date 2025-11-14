@@ -138,6 +138,9 @@ class TestUtilityFunctions:
                 expression = next(iter(attr.owned_elements), None)
                 if expression is not None and isinstance(expression, syside.OperatorExpression):
                     expression, units = expression.arguments.collect()
+                    typecheckedunit = units.cast(syside.FeatureReferenceExpression).referent
+                    print (f"units = {units.referent} {typecheckedunit}")
+            
                     print (f"units = {units} {units.qualified_name}")
                 if expression is not None and isinstance(expression, syside.LiteralRational):
                     print(f"{attr.declared_name}: {expression.value}")
@@ -165,41 +168,11 @@ class TestUtilityFunctions:
             for document_resource in model.documents:
                 with document_resource.lock() as document:
                     find_attribute_values(document.root_node)
-
-    def test_serialize_deserialize2(self, expected):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test1.sysml'
-
-        try:
-            # use minimal = True to get the compact version
-            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(thissrc, minimal=False)
             data = json.loads(raw_jsonf)  # parse JSON string into Python objects
             (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
-            #assert sysml_text !=None
-            check.is_not(sysml_text,None)
-        except ValueError as e:
-            # Custom reporting or logging for the unexpected exception
-            print(f"Caught an unexpected ValueError: {e}")
-            pytest.fail(f"Test failed due to unexpected ValueError: {e}")
 
-    @pytest.mark.timeout(10)  # Test will time out after 10 seconds
-    def test_serialize_deserialize3(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test3.sysml'
-
-        try:
-            # use minimal = True to get the compact version
-            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
-            data = json.loads(raw_jsonf)  # parse JSON string into Python objects
-            (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
-            #assert sysml_text !=None
-            check.is_not(sysml_text,None)
-
-        except ValueError as e:
-            # Custom reporting or logging for the unexpected exception
-            print(f"Caught an unexpected ValueError: {e}")
-            pytest.fail(f"Test failed due to unexpected ValueError: {e}")
-       
+            find_attribute_values(model.document.root_node)
 
     def test_serialize_deserialize4(self):
         EXAMPLE_DIR = pathlib.Path(os.getcwd())
@@ -248,6 +221,38 @@ class TestUtilityFunctions:
         #assert sysml_text !=None
         check.is_not(sysml_text,None)
 
+    def test_serialize_deserialize8(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test1.sysml'
+
+        try:
+            # use minimal = True to get the compact version
+            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+            data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+            (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+            #assert sysml_text !=None
+            check.is_not(sysml_text,None)
+        except ValueError as e:
+            # Custom reporting or logging for the unexpected exception
+            print(f"Caught an unexpected ValueError: {e}")
+            pytest.fail(f"Test failed due to unexpected ValueError: {e}")
+
+    def test_serialize_deserialize9(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test3.sysml'
+
+        try:
+            # use minimal = True to get the compact version
+            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+            data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+            (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+            #assert sysml_text !=None
+            check.is_not(sysml_text,None)
+
+        except ValueError as e:
+            # Custom reporting or logging for the unexpected exception
+            print(f"Caught an unexpected ValueError: {e}")
+            pytest.fail(f"Test failed due to unexpected ValueError: {e}")
 
 
 class TestSysIDEIntegration:

@@ -3,11 +3,14 @@ Tests for flexo_syside_lib core functionality.
 Tests the actual source code from src/ with proper license handling.
 """
 import pytest
-import json
+import pytest_check as check
 import tempfile
 import os
 from unittest.mock import Mock, patch, MagicMock
-
+import json, pprint
+import syside
+import pathlib
+from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual
 
 class TestUtilityFunctions:
     """Test utility functions that don't require SysIDE."""
@@ -83,6 +86,168 @@ class TestUtilityFunctions:
         s = json.dumps(items)
         with pytest.raises(ValueError, match="No root namespace found"):
             _make_root_namespace_first(s)
+
+    def test_serialize_deserialize1(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test2.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'pu-simple.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'pu.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'library.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'geo.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+    def test_serialize_deserialize1a(self):
+        def find_attribute_values(element: syside.Element, level: int = 0) -> None:
+
+            if element.try_cast(syside.AttributeUsage):
+                #if element.name is not None: print("  " * level, element.name)
+                attr  = element.cast(syside.AttributeUsage)
+                expression = next(iter(attr.owned_elements), None)
+                if expression is not None and isinstance(expression, syside.OperatorExpression):
+                    expression, units = expression.arguments.collect()
+                    print (f"units = {units} {units.qualified_name}")
+                if expression is not None and isinstance(expression, syside.LiteralRational):
+                    print(f"{attr.declared_name}: {expression.value}")
+            
+            for child in element.owned_elements.collect():
+                find_attribute_values(child, level + 1)
+
+            thissrc="""
+            package MechanicalObjectExample {
+                private import ScalarValues::*;
+                part def DroneSystem {
+                    part def Drone {
+                        part battery {
+                            /*attribute mass:ISQ::MassValue = 2.5 [SI::kg];*/
+                            attribute m:Real=2.5;
+                        }
+                        part propulsionUnit {
+                            attribute mass:ISQ::MassValue = 0.5 [SI::kg];
+                        }            
+                    }
+                }
+
+            }"""
+            model, diagnostics = syside.load_model(sysml_source=thissrc)
+            for document_resource in model.documents:
+                with document_resource.lock() as document:
+                    find_attribute_values(document.root_node)
+
+    def test_serialize_deserialize2(self, expected):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test1.sysml'
+
+        try:
+            # use minimal = True to get the compact version
+            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+            data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+            (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+            #assert sysml_text !=None
+            check.is_not(sysml_text,None)
+        except ValueError as e:
+            # Custom reporting or logging for the unexpected exception
+            print(f"Caught an unexpected ValueError: {e}")
+            pytest.fail(f"Test failed due to unexpected ValueError: {e}")
+
+    @pytest.mark.timeout(10)  # Test will time out after 10 seconds
+    def test_serialize_deserialize3(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test3.sysml'
+
+        try:
+            # use minimal = True to get the compact version
+            change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+            data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+            (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+            #assert sysml_text !=None
+            check.is_not(sysml_text,None)
+
+        except ValueError as e:
+            # Custom reporting or logging for the unexpected exception
+            print(f"Caught an unexpected ValueError: {e}")
+            pytest.fail(f"Test failed due to unexpected ValueError: {e}")
+       
+
+    def test_serialize_deserialize4(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test4.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        #assert sysml_text !=None
+        check.is_not(sysml_text,None)
+
+
+    def test_serialize_deserialize5(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test5.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        #assert sysml_text !=None
+        check.is_not(sysml_text,None)
+
+
+    def test_serialize_deserialize6(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test6.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        #assert sysml_text !=None
+        check.is_not(sysml_text,None)
+
+
+    def test_serialize_deserialize7(self):
+        EXAMPLE_DIR = pathlib.Path(os.getcwd())
+        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test7.sysml'
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        #assert sysml_text !=None
+        check.is_not(sysml_text,None)
+
 
 
 class TestSysIDEIntegration:

@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Tuple, Optional
 import os
 import pathlib
-
+print('Retriever is loading...')
 import syside_license
 from sysmlv2_client import SysMLV2Client
 from flexo_syside_lib.core import convert_json_to_sysml_textual

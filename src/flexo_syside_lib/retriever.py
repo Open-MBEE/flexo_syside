@@ -81,6 +81,8 @@ def _default_base_and_token() -> Tuple[str, str]:
 # === Main Model Retrieval ===
 def retrieve_latest_sysml_full_model(
     project_name: str = DEFAULT_PROJECT_NAME,
+    base_url:str = None,
+    bearer_token:str = None,
     verbose: bool = True,
 ) -> str:
     """
@@ -102,7 +104,8 @@ def retrieve_latest_sysml_full_model(
         EnvironmentError: if required environment variables are missing.
         RuntimeError: if the project cannot be found.
     """
-    base_url, bearer_token = _default_base_and_token()
+    if base_url is None or bearer_token is None:
+        base_url, bearer_token = _default_base_and_token()
 
     if verbose:
         print(f"[Flexo] Base URL: {base_url}")
@@ -125,9 +128,9 @@ def retrieve_latest_sysml_full_model(
 
     # --- Model retrieval ---
     elements = client.list_elements(project_id, latest_commit_id)
-    sysml_text, _ = convert_json_to_sysml_textual(elements)
+    (sysml_text, model), warnings = convert_json_to_sysml_textual(elements)
 
-    return sysml_text
+    return (sysml_text, model), warnings
 
 
 # === Entrypoint ===

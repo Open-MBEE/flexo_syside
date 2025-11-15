@@ -1,5 +1,5 @@
 git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
 requests
 pytest
-pytest_check as
+pytest_check 
 pytest-timeout

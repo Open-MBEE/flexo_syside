@@ -10,7 +10,7 @@ Contributed by [Planetary Utilities Corp](https://www.planetaryutilities.com/)
 
 Look at examples/basic_notebook.ipynb for how to use the API
 
-It uses [SysML v2 Python client](https://github.com/Open-MBEE/sysmlv2-python-client] to access SysML v2 models with the standard API and has been tested
+It uses [SysML v2 Python client](https://github.com/Open-MBEE/sysmlv2-python-client) to access SysML v2 models with the standard API and has been tested
 with [OpenMBEE Flexo](https://openmbee.atlassian.net/wiki/x/AYAeEw)
 
 You can install Flexo easily yourself using docker compose:

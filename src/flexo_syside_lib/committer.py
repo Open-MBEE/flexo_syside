@@ -125,7 +125,7 @@ def commit_sysml_to_flexo(
     if verbose:
         print(f"[Flexo] Base URL: {base_url}")
         print(f"[Flexo] Target project: name='{project_name}', id={project_id}")
-        print(f"[Flexo] Using token prefix: {api_key[:10]}...")
+        print("[Flexo] Authentication token is configured.")
 
     # --- Build client ---
     try:

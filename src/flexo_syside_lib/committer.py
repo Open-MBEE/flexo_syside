@@ -154,7 +154,7 @@ def commit_sysml_to_flexo(
             if verbose:
                 print(f"[Flexo] Found existing project '{project_name}' -> id: {proj_id}")
         else:
-            _, created_id, _ = create_sysml_project(client, project_name)
+            created_project_obj, created_id, initial_commit_id = create_sysml_project(client, project_name)
             proj_id = created_id
             created_project = True
             if verbose:

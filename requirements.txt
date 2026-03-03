@@ -3,3 +3,4 @@ requests
 pytest
 pytest_check 
 pytest-timeout
+numpy==2.4.2

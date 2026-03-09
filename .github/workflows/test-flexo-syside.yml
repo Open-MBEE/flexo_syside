@@ -39,7 +39,7 @@ jobs:
         pip install requests
         pip install git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
         pip install -e .
-        pip install pytest pytest-cov
+        pip install pytest pytest-cov pytest-check
         # Note: syside will be mocked by conftest.py in CI environment
 
     - name: Set up SysIDE license (if available)

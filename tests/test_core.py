@@ -91,8 +91,29 @@ class TestUtilityFunctions:
         EXAMPLE_DIR = pathlib.Path(os.getcwd())
         MODEL_FILE_PATH = EXAMPLE_DIR / 'Test2.sysml'
 
+        thissrc="""
+            part m0001_2N {
+
+                part nx0001 {
+                    port scp_outside2;
+                }
+
+                part tcs0001{
+                    port scp;
+                }
+
+                interface tcs0001.scp to nx0001.scp_outside2;
+            }
+        """
+
         # use minimal = True to get the compact version
-        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
+        change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_model_string=thissrc, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_string_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
         data = json.loads(raw_jsonf)  # parse JSON string into Python objects
         (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
         assert sysml_text !=None

@@ -37,6 +37,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install requests
         pip install git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
+        pip install syside-license syside --index-url https://gitlab.com/api/v4/projects/69960816/packages/pypi/simple --upgrade
         pip install -e .
         pip install pytest pytest-cov pytest-check
 

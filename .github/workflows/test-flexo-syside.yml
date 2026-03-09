@@ -41,6 +41,7 @@ jobs:
         pip install -e .
         pip install pytest pytest-cov pytest-check
         # Note: syside will be mocked by conftest.py in CI environment
+        # test
 
     - name: Set up SysIDE license (if available)
       run: |

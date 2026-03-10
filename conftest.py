@@ -10,7 +10,7 @@ from unittest.mock import patch, Mock
 
 def setup_syside_license():
     """Set up SysIDE license if available."""
-    return true
+    return True
     # license_key = os.environ.get('SYSIDE_LICENSE_KEY')
     # if license_key:
     #     try:

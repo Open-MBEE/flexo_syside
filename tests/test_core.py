@@ -12,6 +12,10 @@ import syside
 import pathlib
 from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual
 
+from pathlib import Path
+TEST_DIR = Path(__file__).resolve().parent
+
+
 class TestUtilityFunctions:
     """Test utility functions that don't require SysIDE."""
     
@@ -88,8 +92,22 @@ class TestUtilityFunctions:
             _make_root_namespace_first(s)
 
     def test_serialize_deserialize1(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test2.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "test2.sysml"
+
+        thissrc="""
+            part m0001_2N {
+
+                part nx0001 {
+                    port scp_outside2;
+                }
+
+                part tcs0001{
+                    port scp;
+                }
+
+                interface tcs0001.scp to nx0001.scp_outside2;
+            }
+        """
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -97,7 +115,13 @@ class TestUtilityFunctions:
         (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
         assert sysml_text !=None
 
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'pu-simple.sysml'
+        # use minimal = True to get the compact version
+        change_payload_file, raw_jsonf = convert_sysml_string_textual_to_json(sysml_model_string=thissrc, minimal=False)
+        data = json.loads(raw_jsonf)  # parse JSON string into Python objects
+        (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
+        assert sysml_text !=None
+
+        MODEL_FILE_PATH = TEST_DIR / "pu-simple.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -105,7 +129,7 @@ class TestUtilityFunctions:
         (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
         assert sysml_text !=None
 
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'pu.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "pu.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -113,7 +137,7 @@ class TestUtilityFunctions:
         (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
         assert sysml_text !=None
 
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'library.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "library.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -121,7 +145,7 @@ class TestUtilityFunctions:
         (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
         assert sysml_text !=None
 
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'geo.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "geo.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -175,8 +199,7 @@ class TestUtilityFunctions:
             find_attribute_values(model.document.root_node)
 
     def test_serialize_deserialize4(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test4.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "Test4.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -187,8 +210,7 @@ class TestUtilityFunctions:
 
 
     def test_serialize_deserialize5(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test5.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "Test5.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -199,8 +221,7 @@ class TestUtilityFunctions:
 
 
     def test_serialize_deserialize6(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test6.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "Test6.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -211,8 +232,7 @@ class TestUtilityFunctions:
 
 
     def test_serialize_deserialize7(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test7.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "Test7.sysml"
 
         # use minimal = True to get the compact version
         change_payload_file, raw_jsonf = convert_sysml_file_textual_to_json(sysml_file_path=MODEL_FILE_PATH, minimal=False)
@@ -222,8 +242,7 @@ class TestUtilityFunctions:
         check.is_not(sysml_text,None)
 
     def test_serialize_deserialize8(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test1.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "Test1.sysml"
 
         try:
             # use minimal = True to get the compact version
@@ -238,8 +257,7 @@ class TestUtilityFunctions:
             pytest.fail(f"Test failed due to unexpected ValueError: {e}")
 
     def test_serialize_deserialize9(self):
-        EXAMPLE_DIR = pathlib.Path(os.getcwd())
-        MODEL_FILE_PATH = EXAMPLE_DIR / 'Test3.sysml'
+        MODEL_FILE_PATH = TEST_DIR / "Test3.sysml"
 
         try:
             # use minimal = True to get the compact version

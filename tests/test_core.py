@@ -92,7 +92,7 @@ class TestUtilityFunctions:
             _make_root_namespace_first(s)
 
     def test_serialize_deserialize1(self):
-        MODEL_FILE_PATH = TEST_DIR / "Test2.sysml"
+        MODEL_FILE_PATH = TEST_DIR / "test2.sysml"
 
         thissrc="""
             part m0001_2N {

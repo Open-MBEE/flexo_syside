@@ -58,7 +58,7 @@ jobs:
               print(f'Failed to activate SysIDE license: {e}, tests will use mocks')
           " || echo "License setup failed, tests will use mocks"
         else
-            echo "No SysIDE license content found, tests will use mocks if supported"
+          echo "No SysIDE license content found, tests will use mocks if supported"
         fi
       env:
         SYSIDE_LICENSE_CONTENT_B64: ${{ secrets.SYSIDE_LICENSE_CONTENT_B64 }}

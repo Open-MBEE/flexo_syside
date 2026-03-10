@@ -13,7 +13,6 @@ import os
 import pathlib
 from pprint import pprint
 
-import syside_license
 from sysmlv2_client import SysMLV2Client
 from flexo_syside_lib.core import convert_sysml_string_textual_to_json
 from sysml_api.api_lib import (

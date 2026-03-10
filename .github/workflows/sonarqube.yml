@@ -25,9 +25,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install requests
           pip install git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
-          pip install syside
-          pip install -e .
+          pip install syside==0.8.5
           pip install pytest pytest-cov pytest-check coverage
+          pip install -e .
 
       - name: Restore SysIDE license file
         run: |
@@ -39,6 +39,7 @@ jobs:
           python -c "
           try:
               import syside
+              print(syside.__version__)
           except ImportError:
               print('syside_license not available, tests will use mocks')
           except Exception as e:

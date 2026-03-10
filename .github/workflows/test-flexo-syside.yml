@@ -22,7 +22,7 @@ jobs:
       id: setup-python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: '3.12'
 
     - name: Cache pip dependencies
       uses: actions/cache@v4
@@ -37,7 +37,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install requests
         pip install git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
-        pip install syside-license syside --index-url https://gitlab.com/api/v4/projects/69960816/packages/pypi/simple --upgrade
+        pip install syside==0.8.5
         pip install -e .
         pip install pytest pytest-cov pytest-check
 
@@ -47,6 +47,20 @@ jobs:
           echo "SysIDE license content found, restoring license file..."
           echo "$SYSIDE_LICENSE_CONTENT_B64" | base64 -d > automator-license.lic
           ls -l automator-license.lic
+          echo "SysIDE license key found, attempting to set up license..."
+          python -c "
+          try:
+              import syside
+              print(syside.__version__)
+          except ImportError:
+              print('syside_license not available, tests will use mocks')
+          except Exception as e:
+              print(f'Failed to activate SysIDE license: {e}, tests will use mocks')
+          " || echo "License setup failed, tests will use mocks"
+          else
+            echo "No SysIDE license content found, tests will use mocks if supported"
+          fi
+
         else
           echo "No SysIDE license content found, tests will use mocks if supported"
         fi

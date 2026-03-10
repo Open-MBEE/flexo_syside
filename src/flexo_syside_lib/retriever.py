@@ -13,7 +13,6 @@ from typing import Tuple, Optional
 import os
 import pathlib
 print('Retriever is loading...')
-import syside_license
 from sysmlv2_client import SysMLV2Client
 from flexo_syside_lib.core import convert_json_to_sysml_textual
 from sysml_api.api_lib import get_project_by_name, get_last_commit_from_project

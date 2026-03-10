@@ -20,15 +20,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install requests
-          pip install git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
-          pip install syside==0.8.5
-          pip install pytest pytest-cov pytest-check coverage
-          pip install -e .
-
       - name: Restore SysIDE license file
         run: |
           if [ -n "$SYSIDE_LICENSE_CONTENT_B64" ]; then
@@ -50,6 +41,15 @@ jobs:
           fi
         env:
           SYSIDE_LICENSE_CONTENT_B64: ${{ secrets.SYSIDE_LICENSE_CONTENT_B64 }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+          pip install git+https://github.com/Open-MBEE/sysmlv2-python-client.git@main
+          pip install syside==0.8.5
+          pip install pytest pytest-cov pytest-check coverage
+          pip install -e .
 
       - name: Run tests with coverage
         env:

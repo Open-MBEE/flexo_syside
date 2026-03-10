@@ -84,3 +84,8 @@ jobs:
           coverage run -m pytest
           coverage xml -o coverage.xml
 
+      - name: Remove SysIDE license file
+        if: always()
+        run: |
+          rm -f automator-license.lic
+

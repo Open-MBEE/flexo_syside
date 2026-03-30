@@ -88,6 +88,8 @@ def commit_sysml_to_flexo(
     project_id: Optional[str] = None,
     flexo_url: Optional[str] = None,
     verbose: bool = True,
+    delete_project_data: bool = False,
+    replace_model: bool = False,
 ) -> Dict[str, object]:
     """
     Commit SysMLv2 textual content to a Flexo SysIDE server project.
@@ -164,7 +166,7 @@ def commit_sysml_to_flexo(
 
     # --- Commit the change ---
     try:
-        commit_response, commit_id = commit_to_project(client, proj_id, change_payload_str)
+        commit_response, commit_id = commit_to_project(client, proj_id, change_payload_str, delete_project_data = delete_project_data, replace_model = replace_model)
         if verbose:
             print(f"[Flexo] Commit response: {commit_response}")
             print(f"[Flexo] Commit successful, ID: {commit_id}")

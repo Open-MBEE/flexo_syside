@@ -41,39 +41,22 @@ jobs:
         pip install -e .
         pip install pytest pytest-cov pytest-check
 
-    - name: Restore SysIDE license file
+    - name: Check SysIDE license key presence
       run: |
-        if [ -n "$SYSIDE_LICENSE_CONTENT_B64" ]; then
-          echo "SysIDE license content found, restoring license file..."
-          echo "$SYSIDE_LICENSE_CONTENT_B64" | base64 -d > automator-license.lic
-          ls -l automator-license.lic
-          echo "SysIDE license key found, attempting to set up license..."
-          python -c "
-          try:
-            import syside
-            print(syside.__version__)
-          except ImportError:
-            print('syside_license not available, tests will use mocks')
-          except Exception as e:
-            print(f'Failed to activate SysIDE license: {e}, tests will use mocks')
-          " || echo "License setup failed, tests will use mocks"
+        if [ -n "$SYSIDE_LICENSE_KEY" ]; then
+          echo "SYSIDE_LICENSE_KEY present"
         else
-          echo "No SysIDE license content found, tests will use mocks if supported"
+          echo "SYSIDE_LICENSE_KEY missing, tests will use mocks if supported"
         fi
       env:
-        SYSIDE_LICENSE_CONTENT_B64: ${{ secrets.SYSIDE_LICENSE_CONTENT_B64 }}
+        SYSIDE_LICENSE_KEY: ${{ secrets.SYSIDE_LICENSE_KEY }}
 
     - name: Run tests with coverage
       env:
-        SYSIDE_LICENSE_FILE: automator-license.lic
+        SYSIDE_LICENSE_KEY: ${{ secrets.SYSIDE_LICENSE_KEY }}
       run: |
         mkdir -p test-results
         pytest -v --tb=short --junitxml=test-results/results.xml --cov=src/flexo_syside_lib --cov-report=xml:test-results/coverage.xml --cov-report=html:test-results/htmlcov
-
-    - name: Remove SysIDE license file
-      if: always()
-      run: |
-        rm -f automator-license.lic
 
     - name: Upload test results
       uses: actions/upload-artifact@v4

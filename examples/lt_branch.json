@@ -1,1 +1,101 @@
-"[\n  {\n    \"@type\": \"Namespace\",\n    \"@id\": \"b67757f7-b9b0-5d17-b669-1ddf9b874c49\",\n    \"elementId\": \"b67757f7-b9b0-5d17-b669-1ddf9b874c49\",\n    \"ownedRelationship\": [\n      {\n        \"@id\": \"12dcda40-d102-5822-8304-7bf6f9708e50\"\n      }\n    ],\n    \"qualifiedName\": \"2026-06-12T16:10:05Z\"\n  },\n  {\n    \"@type\": \"OwningMembership\",\n    \"@id\": \"12dcda40-d102-5822-8304-7bf6f9708e50\",\n    \"elementId\": \"12dcda40-d102-5822-8304-7bf6f9708e50\",\n    \"owningRelatedElement\": {\n      \"@id\": \"b67757f7-b9b0-5d17-b669-1ddf9b874c49\"\n    },\n    \"memberElement\": {\n      \"@id\": \"5dc23f7c-bffd-5a67-88cc-b08d6fff6d76\"\n    },\n    \"memberName\": \"pkg\",\n    \"ownedRelatedElement\": [\n      {\n        \"@id\": \"5dc23f7c-bffd-5a67-88cc-b08d6fff6d76\"\n      }\n    ]\n  },\n  {\n    \"@type\": \"Package\",\n    \"@id\": \"5dc23f7c-bffd-5a67-88cc-b08d6fff6d76\",\n    \"elementId\": \"5dc23f7c-bffd-5a67-88cc-b08d6fff6d76\",\n    \"declaredName\": \"pkg\",\n    \"owningRelationship\": {\n      \"@id\": \"12dcda40-d102-5822-8304-7bf6f9708e50\"\n    },\n    \"ownedRelationship\": [\n      {\n        \"@id\": \"5686336d-35dc-5177-8bdf-e917c5d97564\"\n      },\n      {\n        \"@id\": \"1de04ea6-2c35-597c-8e3e-edc55381a072\"\n      }\n    ]\n  },\n  {\n    \"@type\": \"OwningMembership\",\n    \"@id\": \"5686336d-35dc-5177-8bdf-e917c5d97564\",\n    \"elementId\": \"5686336d-35dc-5177-8bdf-e917c5d97564\",\n    \"owningRelatedElement\": {\n      \"@id\": \"5dc23f7c-bffd-5a67-88cc-b08d6fff6d76\"\n    },\n    \"memberElement\": {\n      \"@id\": \"cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc\"\n    },\n    \"memberName\": \"p\",\n    \"ownedRelatedElement\": [\n      {\n        \"@id\": \"cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc\"\n      }\n    ]\n  },\n  {\n    \"@type\": \"PartUsage\",\n    \"@id\": \"cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc\",\n    \"elementId\": \"cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc\",\n    \"declaredName\": \"p\",\n    \"owningRelationship\": {\n      \"@id\": \"5686336d-35dc-5177-8bdf-e917c5d97564\"\n    },\n    \"isVariation\": false\n  },\n  {\n    \"@type\": \"OwningMembership\",\n    \"@id\": \"1de04ea6-2c35-597c-8e3e-edc55381a072\",\n    \"elementId\": \"1de04ea6-2c35-597c-8e3e-edc55381a072\",\n    \"owningRelatedElement\": {\n      \"@id\": \"5dc23f7c-bffd-5a67-88cc-b08d6fff6d76\"\n    },\n    \"memberElement\": {\n      \"@id\": \"d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e\"\n    },\n    \"memberName\": \"p1\",\n    \"ownedRelatedElement\": [\n      {\n        \"@id\": \"d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e\"\n      }\n    ]\n  },\n  {\n    \"@type\": \"PartUsage\",\n    \"@id\": \"d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e\",\n    \"elementId\": \"d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e\",\n    \"declaredName\": \"p1\",\n    \"owningRelationship\": {\n      \"@id\": \"1de04ea6-2c35-597c-8e3e-edc55381a072\"\n    },\n    \"isVariation\": false\n  }\n]"
+[
+  {
+    "@type": "Namespace",
+    "@id": "b67757f7-b9b0-5d17-b669-1ddf9b874c49",
+    "elementId": "b67757f7-b9b0-5d17-b669-1ddf9b874c49",
+    "ownedRelationship": [
+      {
+        "@id": "12dcda40-d102-5822-8304-7bf6f9708e50"
+      }
+    ],
+    "qualifiedName": "2026-06-12T16:26:42Z"
+  },
+  {
+    "@type": "OwningMembership",
+    "@id": "12dcda40-d102-5822-8304-7bf6f9708e50",
+    "elementId": "12dcda40-d102-5822-8304-7bf6f9708e50",
+    "owningRelatedElement": {
+      "@id": "b67757f7-b9b0-5d17-b669-1ddf9b874c49"
+    },
+    "memberElement": {
+      "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+    },
+    "memberName": "pkg",
+    "ownedRelatedElement": [
+      {
+        "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+      }
+    ]
+  },
+  {
+    "@type": "Package",
+    "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76",
+    "elementId": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76",
+    "declaredName": "pkg",
+    "owningRelationship": {
+      "@id": "12dcda40-d102-5822-8304-7bf6f9708e50"
+    },
+    "ownedRelationship": [
+      {
+        "@id": "5686336d-35dc-5177-8bdf-e917c5d97564"
+      },
+      {
+        "@id": "1de04ea6-2c35-597c-8e3e-edc55381a072"
+      }
+    ]
+  },
+  {
+    "@type": "OwningMembership",
+    "@id": "5686336d-35dc-5177-8bdf-e917c5d97564",
+    "elementId": "5686336d-35dc-5177-8bdf-e917c5d97564",
+    "owningRelatedElement": {
+      "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+    },
+    "memberElement": {
+      "@id": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc"
+    },
+    "memberName": "p",
+    "ownedRelatedElement": [
+      {
+        "@id": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc"
+      }
+    ]
+  },
+  {
+    "@type": "PartUsage",
+    "@id": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc",
+    "elementId": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc",
+    "declaredName": "p",
+    "owningRelationship": {
+      "@id": "5686336d-35dc-5177-8bdf-e917c5d97564"
+    },
+    "isVariation": false
+  },
+  {
+    "@type": "OwningMembership",
+    "@id": "1de04ea6-2c35-597c-8e3e-edc55381a072",
+    "elementId": "1de04ea6-2c35-597c-8e3e-edc55381a072",
+    "owningRelatedElement": {
+      "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+    },
+    "memberElement": {
+      "@id": "d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e"
+    },
+    "memberName": "p1",
+    "ownedRelatedElement": [
+      {
+        "@id": "d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e"
+      }
+    ]
+  },
+  {
+    "@type": "PartUsage",
+    "@id": "d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e",
+    "elementId": "d6bb2bd6-e0ba-50c6-aa4f-0c824361ca4e",
+    "declaredName": "p1",
+    "owningRelationship": {
+      "@id": "1de04ea6-2c35-597c-8e3e-edc55381a072"
+    },
+    "isVariation": false
+  }
+]

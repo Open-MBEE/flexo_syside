@@ -13,7 +13,7 @@ import sys
 import syside
 import pathlib
 import types
-from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual
+from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual, expand_minimal_json_to_full_json
 
 from pathlib import Path
 TEST_DIR = Path(__file__).resolve().parent
@@ -450,6 +450,59 @@ class TestSysIDEIntegration:
         options = _create_serialization_options()
         assert options is not None
         mock_syside.SerializationOptions.assert_called_once()
+
+    @patch('flexo_syside_lib.core.syside')
+    def test_expand_minimal_json_to_full_json_from_raw_list(self, mock_syside):
+        sample_minimal_json = [{"@id": "ns1", "@type": "Namespace"}]
+        sample_full_json = [
+            {"@id": "ns1", "@type": "Namespace", "qualifiedName": "2020-01-01T00:00:00Z"},
+            {"@id": "comp1", "@type": "Component", "name": "TestComponent"},
+        ]
+
+        mock_deserialized_model = Mock()
+        mock_document = Mock()
+        mock_document.url = "memory:///import.sysml"
+        mock_document_lock = Mock()
+        mock_locked = Mock()
+        mock_locked.root_node = Mock()
+        mock_document_lock.__enter__ = Mock(return_value=mock_locked)
+        mock_document_lock.__exit__ = Mock(return_value=None)
+        mock_document.mutex.lock.return_value = mock_document_lock
+        mock_deserialized_model.document = mock_document
+
+        mock_writer = Mock()
+        mock_writer.result = json.dumps(sample_full_json)
+        mock_options = Mock()
+
+        mock_env = Mock()
+        mock_env.index.return_value = Mock()
+        mock_env.lib = Mock()
+        mock_sema = Mock()
+
+        mock_syside.json.loads.return_value = (mock_deserialized_model, Mock())
+        mock_syside.Environment.get_default.return_value = mock_env
+        mock_syside.Sema.return_value = mock_sema
+
+        with patch('flexo_syside_lib.core._create_json_writer', return_value=mock_writer), \
+             patch('flexo_syside_lib.core._create_serialization_options', return_value=mock_options), \
+             patch('flexo_syside_lib.core.syside.serialize'):
+            payload, json_string = expand_minimal_json_to_full_json(sample_minimal_json)
+
+        parsed_json = json.loads(json_string)
+        assert isinstance(payload, list)
+        assert parsed_json[0]["@type"] == "Namespace"
+        assert "qualifiedName" in parsed_json[0]
+        mock_syside.json.loads.assert_called_once()
+        mock_sema.resolve.assert_called_once_with(
+            [mock_document],
+            mock_env.index.return_value,
+            mock_env.lib,
+        )
+
+    @patch('flexo_syside_lib.core.syside')
+    def test_expand_minimal_json_to_full_json_rejects_invalid_input(self, mock_syside):
+        with pytest.raises(TypeError, match="minimal_json must be dict/list/str"):
+            expand_minimal_json_to_full_json(123)
 
 
 class TestLicenseHandling:

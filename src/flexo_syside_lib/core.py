@@ -286,6 +286,51 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
 
     return (sysml_text, deserialized_model), captured_warnings
 
+def expand_minimal_json_to_full_json(minimal_json) -> tuple:
+    """
+    Expand minimal SysML JSON into the repository's current non-minimal JSON form.
+
+    This uses JSON deserialization followed by semantic resolution so implied
+    relationships are reconstructed without round-tripping through text.
+    Returns (change_payload, json_string), matching convert_sysml_*_to_json.
+    """
+    if isinstance(minimal_json, (dict, list)):
+        json_in = json.dumps(minimal_json, ensure_ascii=False)
+    elif isinstance(minimal_json, str):
+        json_in = minimal_json
+    else:
+        raise TypeError(
+            f"minimal_json must be dict/list/str, got {type(minimal_json).__name__}"
+        )
+
+    json_import = _make_root_namespace_first(json_in)
+    deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
+
+    env = syside.Environment.get_default()
+    sema = syside.Sema()
+    sema.resolve(
+        [deserialized_model.document],
+        env.index(),
+        env.lib,
+    )
+
+    writer = _create_json_writer()
+    options = _create_serialization_options()
+    with deserialized_model.document.mutex.lock() as locked:
+        syside.serialize(locked.root_node, writer, options)
+        json_string = writer.result
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    obj = json.loads(json_string)
+    for element in obj:
+        if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+            element["qualifiedName"] = now_str
+            break
+
+    json_string = json.dumps(obj, indent=2)
+    data = json.loads(json_string)
+    return _wrap_elements_as_payload(data), json_string
+
 def _children_iter(elem):
     children = getattr(elem, "owned_elements", None)
     if not children:

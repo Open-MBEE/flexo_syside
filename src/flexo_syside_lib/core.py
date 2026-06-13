@@ -16,6 +16,8 @@ import ast
 # utils_syside.py
 from typing import Any
 
+ELEMENT_TYPE_KEY = "@type"
+
 def _replace_none_with_empty(obj):
     if isinstance(obj, dict):
         return {k: _replace_none_with_empty(v) if v is not None else "" for k, v in obj.items()}
@@ -70,7 +72,7 @@ def _make_root_namespace_first(json_str: str) -> str:
         # Replace empty strings with None recursively
         if isinstance(element, dict):
             # detect root namespace while walking
-            if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
                 current = element.get("qualifiedName", None)
                 if current is None:
                     found_root_namespace = index
@@ -142,7 +144,7 @@ def _model_to_json (model:syside.Model, minimal:bool=False):
 
     obj = json.loads(json_string)
     for element in obj:
-        if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
             element["qualifiedName"] = now_str   # set the value here
             #print(element)
             break
@@ -285,6 +287,58 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
     sysml_text = syside.pprint(root_namespace, printer, printer_cfg)
 
     return (sysml_text, deserialized_model), captured_warnings
+
+def expand_minimal_json_to_full_json(minimal_json) -> tuple:
+    """
+    Expand minimal SysML JSON into the repository's current non-minimal JSON form.
+
+    This uses JSON deserialization followed by semantic resolution so implied
+    relationships are reconstructed without round-tripping through text.
+    Returns (change_payload, json_string), matching convert_sysml_*_to_json.
+    """
+    if isinstance(minimal_json, (dict, list)):
+        json_in = json.dumps(minimal_json, ensure_ascii=False)
+    elif isinstance(minimal_json, str):
+        json_in = minimal_json
+    else:
+        raise TypeError(
+            f"minimal_json must be dict/list/str, got {type(minimal_json).__name__}"
+        )
+
+    json_import = _make_root_namespace_first(json_in)
+    deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
+
+    env = syside.Environment.get_default()
+    id_map = syside.IdMap()
+    for mutex in env.documents:
+        with mutex.lock() as dep:
+            id_map.insert_or_assign(dep)
+
+    deserialized_model.link(id_map)
+
+    sema = syside.Sema()
+    sema.resolve(
+        [deserialized_model.document],
+        env.index(),
+        env.lib,
+    )
+
+    writer = _create_json_writer()
+    options = _create_serialization_options()
+    with deserialized_model.document.mutex.lock() as locked:
+        syside.serialize(locked.root_node, writer, options)
+        json_string = writer.result
+
+    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    obj = json.loads(json_string)
+    for element in obj:
+        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
+            element["qualifiedName"] = now_str
+            break
+
+    json_string = json.dumps(obj, indent=2)
+    data = json.loads(json_string)
+    return _wrap_elements_as_payload(data), json_string
 
 def _children_iter(elem):
     children = getattr(elem, "owned_elements", None)

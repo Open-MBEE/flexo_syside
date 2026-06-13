@@ -13,7 +13,7 @@ import sys
 import syside
 import pathlib
 import types
-from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual
+from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual, expand_minimal_json_to_full_json
 
 from pathlib import Path
 TEST_DIR = Path(__file__).resolve().parent
@@ -275,6 +275,59 @@ class TestUtilityFunctions:
             print(f"Caught an unexpected ValueError: {e}")
             pytest.fail(f"Test failed due to unexpected ValueError: {e}")
 
+    def test_expand_minimal_json_to_full_json_restores_implied_relationships(self):
+        model_file_path = TEST_DIR / "test2.sysml"
+
+        _, raw_json_min = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=True,
+        )
+        _, raw_json_full = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=False,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json(raw_json_min)
+
+        full_data = json.loads(raw_json_full)
+        expanded_data = json.loads(raw_json_expanded)
+
+        full_implied = [e for e in full_data if e.get("isImplied")]
+        expanded_implied = [e for e in expanded_data if e.get("isImplied")]
+
+        assert expanded_implied
+        assert len(expanded_data) == len(full_data)
+        assert len(expanded_implied) == len(full_implied)
+        assert sum(1 for e in expanded_data if e.get("@type") == "Subclassification") == \
+            sum(1 for e in full_data if e.get("@type") == "Subclassification")
+
+    def test_expand_minimal_json_to_full_json_flashlight_example(self):
+        model_file_path = TEST_DIR / "Flashlight.sysml"
+
+        _, raw_json_min = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=True,
+        )
+        _, raw_json_full = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=False,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json(raw_json_min)
+
+        full_data = json.loads(raw_json_full)
+        expanded_data = json.loads(raw_json_expanded)
+
+        full_implied = [e for e in full_data if e.get("isImplied")]
+        expanded_implied = [e for e in expanded_data if e.get("isImplied")]
+
+        assert expanded_implied
+        assert len(expanded_data) >= len(full_data)
+        assert len(expanded_implied) >= len(full_implied)
+        assert {
+            e.get("@type") for e in expanded_implied
+        } >= {
+            e.get("@type") for e in full_implied
+        }
+
 
 class TestSysIDEIntegration:
     """Test SysIDE-dependent functions with proper mocking."""
@@ -451,6 +504,66 @@ class TestSysIDEIntegration:
         assert options is not None
         mock_syside.SerializationOptions.assert_called_once()
 
+    @patch('flexo_syside_lib.core.syside')
+    def test_expand_minimal_json_to_full_json_from_raw_list(self, mock_syside):
+        sample_minimal_json = [{"@id": "ns1", "@type": "Namespace"}]
+        sample_full_json = [
+            {"@id": "ns1", "@type": "Namespace", "qualifiedName": "2020-01-01T00:00:00Z"},
+            {"@id": "comp1", "@type": "Component", "name": "TestComponent"},
+        ]
+
+        mock_deserialized_model = Mock()
+        mock_document = Mock()
+        mock_document.url = "memory:///import.sysml"
+        mock_document_lock = Mock()
+        mock_locked = Mock()
+        mock_locked.root_node = Mock()
+        mock_document_lock.__enter__ = Mock(return_value=mock_locked)
+        mock_document_lock.__exit__ = Mock(return_value=None)
+        mock_document.mutex.lock.return_value = mock_document_lock
+        mock_deserialized_model.document = mock_document
+
+        mock_writer = Mock()
+        mock_writer.result = json.dumps(sample_full_json)
+        mock_options = Mock()
+
+        mock_env = Mock()
+        mock_env_doc = Mock()
+        mock_env_doc_ctx = Mock()
+        mock_env_dep = Mock()
+        mock_env_doc_ctx.__enter__ = Mock(return_value=mock_env_dep)
+        mock_env_doc_ctx.__exit__ = Mock(return_value=None)
+        mock_env_doc.lock.return_value = mock_env_doc_ctx
+        mock_env.documents = [mock_env_doc]
+        mock_env.index.return_value = Mock()
+        mock_env.lib = Mock()
+        mock_sema = Mock()
+
+        mock_syside.json.loads.return_value = (mock_deserialized_model, Mock())
+        mock_syside.Environment.get_default.return_value = mock_env
+        mock_syside.Sema.return_value = mock_sema
+
+        with patch('flexo_syside_lib.core._create_json_writer', return_value=mock_writer), \
+             patch('flexo_syside_lib.core._create_serialization_options', return_value=mock_options), \
+             patch('flexo_syside_lib.core.syside.serialize'):
+            payload, json_string = expand_minimal_json_to_full_json(sample_minimal_json)
+
+        parsed_json = json.loads(json_string)
+        assert isinstance(payload, list)
+        assert parsed_json[0]["@type"] == "Namespace"
+        assert "qualifiedName" in parsed_json[0]
+        mock_syside.json.loads.assert_called_once()
+        mock_sema.resolve.assert_called_once_with(
+            [mock_document],
+            mock_env.index.return_value,
+            mock_env.lib,
+        )
+
+    @patch('flexo_syside_lib.core.syside')
+    def test_expand_minimal_json_to_full_json_rejects_invalid_input(self, mock_syside):
+        with pytest.raises(TypeError, match="minimal_json must be dict/list/str"):
+            expand_minimal_json_to_full_json(123)
+
 
 class TestLicenseHandling:
     """Test license handling and graceful degradation."""
@@ -469,6 +582,15 @@ class TestLicenseHandling:
         # Test that the function works regardless of SysIDE state
         result = _replace_none_with_empty({"test": None})
         assert result == {"test": ""}
+
+    def test_package_root_exports_conversion_helpers(self):
+        """Test that package root exports the main conversion helpers."""
+        import flexo_syside_lib
+
+        assert callable(flexo_syside_lib.convert_sysml_file_textual_to_json)
+        assert callable(flexo_syside_lib.convert_sysml_string_textual_to_json)
+        assert callable(flexo_syside_lib.convert_json_to_sysml_textual)
+        assert callable(flexo_syside_lib.expand_minimal_json_to_full_json)
 
 
 class TestCommitterRegression:

@@ -1,0 +1,71 @@
+[
+  {
+    "@type": "Namespace",
+    "@id": "b67757f7-b9b0-5d17-b669-1ddf9b874c49",
+    "elementId": "b67757f7-b9b0-5d17-b669-1ddf9b874c49",
+    "ownedRelationship": [
+      {
+        "@id": "12dcda40-d102-5822-8304-7bf6f9708e50"
+      }
+    ],
+    "qualifiedName": "2026-06-12T16:26:42Z"
+  },
+  {
+    "@type": "OwningMembership",
+    "@id": "12dcda40-d102-5822-8304-7bf6f9708e50",
+    "elementId": "12dcda40-d102-5822-8304-7bf6f9708e50",
+    "owningRelatedElement": {
+      "@id": "b67757f7-b9b0-5d17-b669-1ddf9b874c49"
+    },
+    "memberElement": {
+      "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+    },
+    "memberName": "pkg",
+    "ownedRelatedElement": [
+      {
+        "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+      }
+    ]
+  },
+  {
+    "@type": "Package",
+    "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76",
+    "elementId": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76",
+    "declaredName": "pkg",
+    "owningRelationship": {
+      "@id": "12dcda40-d102-5822-8304-7bf6f9708e50"
+    },
+    "ownedRelationship": [
+      {
+        "@id": "5686336d-35dc-5177-8bdf-e917c5d97564"
+      }
+    ]
+  },
+  {
+    "@type": "OwningMembership",
+    "@id": "5686336d-35dc-5177-8bdf-e917c5d97564",
+    "elementId": "5686336d-35dc-5177-8bdf-e917c5d97564",
+    "owningRelatedElement": {
+      "@id": "5dc23f7c-bffd-5a67-88cc-b08d6fff6d76"
+    },
+    "memberElement": {
+      "@id": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc"
+    },
+    "memberName": "p",
+    "ownedRelatedElement": [
+      {
+        "@id": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc"
+      }
+    ]
+  },
+  {
+    "@type": "PartUsage",
+    "@id": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc",
+    "elementId": "cfac584e-a870-5ad9-8ac3-7cb8c0ca98cc",
+    "declaredName": "p",
+    "owningRelationship": {
+      "@id": "5686336d-35dc-5177-8bdf-e917c5d97564"
+    },
+    "isVariation": false
+  }
+]

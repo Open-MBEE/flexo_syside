@@ -275,6 +275,59 @@ class TestUtilityFunctions:
             print(f"Caught an unexpected ValueError: {e}")
             pytest.fail(f"Test failed due to unexpected ValueError: {e}")
 
+    def test_expand_minimal_json_to_full_json_restores_implied_relationships(self):
+        model_file_path = TEST_DIR / "test2.sysml"
+
+        _, raw_json_min = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=True,
+        )
+        _, raw_json_full = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=False,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json(raw_json_min)
+
+        full_data = json.loads(raw_json_full)
+        expanded_data = json.loads(raw_json_expanded)
+
+        full_implied = [e for e in full_data if e.get("isImplied")]
+        expanded_implied = [e for e in expanded_data if e.get("isImplied")]
+
+        assert expanded_implied
+        assert len(expanded_data) == len(full_data)
+        assert len(expanded_implied) == len(full_implied)
+        assert sum(1 for e in expanded_data if e.get("@type") == "Subclassification") == \
+            sum(1 for e in full_data if e.get("@type") == "Subclassification")
+
+    def test_expand_minimal_json_to_full_json_flashlight_example(self):
+        model_file_path = TEST_DIR.parent / "examples" / "Flashlight.sysml"
+
+        _, raw_json_min = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=True,
+        )
+        _, raw_json_full = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=False,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json(raw_json_min)
+
+        full_data = json.loads(raw_json_full)
+        expanded_data = json.loads(raw_json_expanded)
+
+        full_implied = [e for e in full_data if e.get("isImplied")]
+        expanded_implied = [e for e in expanded_data if e.get("isImplied")]
+
+        assert expanded_implied
+        assert len(expanded_data) >= len(full_data)
+        assert len(expanded_implied) >= len(full_implied)
+        assert {
+            e.get("@type") for e in expanded_implied
+        } >= {
+            e.get("@type") for e in full_implied
+        }
+
 
 class TestSysIDEIntegration:
     """Test SysIDE-dependent functions with proper mocking."""

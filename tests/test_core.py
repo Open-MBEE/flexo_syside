@@ -528,6 +528,13 @@ class TestSysIDEIntegration:
         mock_options = Mock()
 
         mock_env = Mock()
+        mock_env_doc = Mock()
+        mock_env_doc_ctx = Mock()
+        mock_env_dep = Mock()
+        mock_env_doc_ctx.__enter__ = Mock(return_value=mock_env_dep)
+        mock_env_doc_ctx.__exit__ = Mock(return_value=None)
+        mock_env_doc.lock.return_value = mock_env_doc_ctx
+        mock_env.documents = [mock_env_doc]
         mock_env.index.return_value = Mock()
         mock_env.lib = Mock()
         mock_sema = Mock()

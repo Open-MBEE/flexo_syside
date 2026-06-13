@@ -307,6 +307,13 @@ def expand_minimal_json_to_full_json(minimal_json) -> tuple:
     deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
 
     env = syside.Environment.get_default()
+    id_map = syside.IdMap()
+    for mutex in env.documents:
+        with mutex.lock() as dep:
+            id_map.insert_or_assign(dep)
+
+    deserialized_model.link(id_map)
+
     sema = syside.Sema()
     sema.resolve(
         [deserialized_model.document],

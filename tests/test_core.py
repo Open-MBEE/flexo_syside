@@ -301,7 +301,7 @@ class TestUtilityFunctions:
             sum(1 for e in full_data if e.get("@type") == "Subclassification")
 
     def test_expand_minimal_json_to_full_json_flashlight_example(self):
-        model_file_path = TEST_DIR.parent / "examples" / "Flashlight.sysml"
+        model_file_path = TEST_DIR / "Flashlight.sysml"
 
         _, raw_json_min = convert_sysml_file_textual_to_json(
             sysml_file_path=model_file_path,

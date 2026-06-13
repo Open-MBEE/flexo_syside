@@ -16,6 +16,8 @@ import ast
 # utils_syside.py
 from typing import Any
 
+ELEMENT_TYPE_KEY = "@type"
+
 def _replace_none_with_empty(obj):
     if isinstance(obj, dict):
         return {k: _replace_none_with_empty(v) if v is not None else "" for k, v in obj.items()}
@@ -70,7 +72,7 @@ def _make_root_namespace_first(json_str: str) -> str:
         # Replace empty strings with None recursively
         if isinstance(element, dict):
             # detect root namespace while walking
-            if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
                 current = element.get("qualifiedName", None)
                 if current is None:
                     found_root_namespace = index
@@ -142,7 +144,7 @@ def _model_to_json (model:syside.Model, minimal:bool=False):
 
     obj = json.loads(json_string)
     for element in obj:
-        if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
             element["qualifiedName"] = now_str   # set the value here
             #print(element)
             break
@@ -330,7 +332,7 @@ def expand_minimal_json_to_full_json(minimal_json) -> tuple:
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     obj = json.loads(json_string)
     for element in obj:
-        if element.get("@type") == "Namespace" and "owningRelationship" not in element:
+        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
             element["qualifiedName"] = now_str
             break
 

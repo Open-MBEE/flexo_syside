@@ -34,5 +34,5 @@ It also depends on sysIDE automator library: https://sensmetry.com/syside/
 ### Recommended install (development or production):
 
 ```bash
-pip install syside==0.8.6
+pip install syside==0.10.0
 pip install -e .

@@ -583,6 +583,15 @@ class TestLicenseHandling:
         result = _replace_none_with_empty({"test": None})
         assert result == {"test": ""}
 
+    def test_package_root_exports_conversion_helpers(self):
+        """Test that package root exports the main conversion helpers."""
+        import flexo_syside_lib
+
+        assert callable(flexo_syside_lib.convert_sysml_file_textual_to_json)
+        assert callable(flexo_syside_lib.convert_sysml_string_textual_to_json)
+        assert callable(flexo_syside_lib.convert_json_to_sysml_textual)
+        assert callable(flexo_syside_lib.expand_minimal_json_to_full_json)
+
 
 class TestCommitterRegression:
     """Regression tests for Flexo commit argument forwarding."""

@@ -565,6 +565,82 @@ class TestSysIDEIntegration:
             expand_minimal_json_to_full_json(123)
 
 
+class TestExpandIntegration:
+    """Integration tests for expand_minimal_json_to_full_json using live syside."""
+
+    SIMPLE_SRC = """
+        part def Wheel {}
+        part def Car {
+            part frontLeft : Wheel;
+            part frontRight : Wheel;
+        }
+    """
+
+    def _ids(self, payload):
+        return {e["identity"]["@id"] for e in payload if e.get("identity", {}).get("@id")}
+
+    def test_element_count_matches_full_direct(self):
+        _, minimal_json = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=True)
+        full_payload, _ = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=False)
+        expanded_payload, _ = expand_minimal_json_to_full_json(minimal_json)
+
+        assert len(expanded_payload) == len(full_payload), (
+            f"expanded={len(expanded_payload)} but full={len(full_payload)}"
+        )
+
+    def test_element_types_match_full_direct(self):
+        _, minimal_json = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=True)
+        full_payload, _ = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=False)
+        expanded_payload, _ = expand_minimal_json_to_full_json(minimal_json)
+
+        full_types = sorted(e["payload"].get("@type", "") for e in full_payload)
+        expanded_types = sorted(e["payload"].get("@type", "") for e in expanded_payload)
+        assert full_types == expanded_types
+
+    def test_all_original_ids_preserved(self):
+        # Sema.resolve operates on the loaded JSON model in-place, so ALL original
+        # UUIDs (including anonymous v4 elements like FeatureTyping) are preserved.
+        minimal_payload, minimal_json = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=True)
+        expanded_payload, _ = expand_minimal_json_to_full_json(minimal_json)
+
+        minimal_ids = self._ids(minimal_payload)
+        expanded_ids = self._ids(expanded_payload)
+        missing = minimal_ids - expanded_ids
+        assert not missing, f"IDs lost after expansion: {missing}"
+
+    def test_payload_structure(self):
+        _, minimal_json = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=True)
+        expanded_payload, expanded_json = expand_minimal_json_to_full_json(minimal_json)
+
+        assert len(expanded_payload) > 0
+        for item in expanded_payload:
+            assert "payload" in item
+            assert "identity" in item
+
+        assert isinstance(json.loads(expanded_json), list)
+
+    def test_accepts_list_input(self):
+        _, minimal_json = convert_sysml_string_textual_to_json(self.SIMPLE_SRC, minimal=True)
+        expanded_payload, _ = expand_minimal_json_to_full_json(json.loads(minimal_json))
+        assert len(expanded_payload) > 0
+
+    def test_rejects_invalid_type(self):
+        with pytest.raises(TypeError, match="minimal_json must be dict/list/str"):
+            expand_minimal_json_to_full_json(42)
+
+    def test_pu_simple_file_full_restoration(self):
+        model_file = TEST_DIR / "pu-simple.sysml"
+        minimal_payload, minimal_json = convert_sysml_file_textual_to_json(sysml_file_path=model_file, minimal=True)
+        full_payload, _ = convert_sysml_file_textual_to_json(sysml_file_path=model_file, minimal=False)
+        expanded_payload, _ = expand_minimal_json_to_full_json(minimal_json)
+
+        print(f"\n[pu-simple] minimal={len(minimal_payload)} | full={len(full_payload)} | expanded={len(expanded_payload)}")
+        check.equal(len(expanded_payload), len(full_payload))
+        minimal_ids = self._ids(minimal_payload)
+        expanded_ids = self._ids(expanded_payload)
+        check.equal(minimal_ids - expanded_ids, set())
+
+
 class TestLicenseHandling:
     """Test license handling and graceful degradation."""
     

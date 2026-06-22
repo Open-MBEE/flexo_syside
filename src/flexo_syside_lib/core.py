@@ -288,14 +288,8 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
 
     return (sysml_text, deserialized_model), captured_warnings
 
-def expand_minimal_json_to_full_json(minimal_json) -> tuple:
-    """
-    Expand minimal SysML JSON into the repository's current non-minimal JSON form.
-
-    This uses JSON deserialization followed by semantic resolution so implied
-    relationships are reconstructed without round-tripping through text.
-    Returns (change_payload, json_string), matching convert_sysml_*_to_json.
-    """
+def _expand_minimal_json_list(minimal_json, *, for_api: bool = False) -> list[dict]:
+    """Run SysIDE semantic expansion and return a flat element list."""
     if isinstance(minimal_json, (dict, list)):
         json_in = json.dumps(minimal_json, ensure_ascii=False)
     elif isinstance(minimal_json, str):
@@ -329,16 +323,47 @@ def expand_minimal_json_to_full_json(minimal_json) -> tuple:
         syside.serialize(locked.root_node, writer, options)
         json_string = writer.result
 
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     obj = json.loads(json_string)
-    for element in obj:
-        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
-            element["qualifiedName"] = now_str
-            break
+    if not for_api:
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        for element in obj:
+            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
+                element["qualifiedName"] = now_str
+                break
+    return obj
 
+
+def expand_minimal_json_to_full_json(minimal_json, *, for_api: bool = False) -> tuple:
+    """
+    Expand minimal SysML JSON into the repository's current non-minimal JSON form.
+
+    This uses JSON deserialization followed by semantic resolution so implied
+    relationships are reconstructed without round-tripping through text.
+    Returns (change_payload, json_string), matching convert_sysml_*_to_json.
+
+    When for_api=True, skip root-namespace timestamp injection used for commit
+    payloads. Callers serving Flexo GET /elements should use
+    expand_backend_elements_for_api() instead.
+    """
+    obj = _expand_minimal_json_list(minimal_json, for_api=for_api)
     json_string = json.dumps(obj, indent=2)
-    data = json.loads(json_string)
-    return _wrap_elements_as_payload(data), json_string
+    return _wrap_elements_as_payload(obj), json_string
+
+
+def expand_backend_elements_for_api(backend_elements: list[dict]) -> list[dict]:
+    """
+    Expand minimal Flexo GET /elements JSON for visualization consumers.
+
+    Backend element objects are preserved verbatim. Only net-new implied
+    elements from SysIDE expansion are appended, projected to Flexo's API shape.
+    """
+    from .api_expand import merge_expanded_elements_for_api
+
+    if not backend_elements:
+        return []
+
+    expanded = _expand_minimal_json_list(backend_elements, for_api=True)
+    return merge_expanded_elements_for_api(backend_elements, expanded)
 
 def _children_iter(elem):
     children = getattr(elem, "owned_elements", None)

@@ -126,6 +126,20 @@ def _create_serialization_options() -> syside.SerializationOptions:
     
     return options
 
+
+def _apply_root_namespace_name(
+    full_json_elements: list[dict],
+    root_name: str | None,
+) -> list[dict]:
+    if root_name is None:
+        return full_json_elements
+
+    for element in full_json_elements:
+        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
+            element["qualifiedName"] = root_name
+            break
+    return full_json_elements
+
 def _model_to_json(
     model:syside.Model,
     minimal:bool=False,
@@ -339,13 +353,6 @@ def expand_minimal_json_to_full_json(minimal_json:str) -> tuple:
         get_root_namespace_names,
     )
 
-    def _apply_root_namespace_name(full_json_elements: list[dict], root_name: str) -> list[dict]:
-        for element in full_json_elements:
-            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
-                element["qualifiedName"] = root_name
-                break
-        return full_json_elements
-
     def _expand_namespace_model(
         root_name: str,
         sysml_text: str,
@@ -417,24 +424,28 @@ def expand_minimal_json_to_full_json_model(minimal_json) -> tuple:
     """
     Expand minimal SysML JSON into the repository's current non-minimal JSON form.
 
-    This uses JSON deserialization followed by semantic resolution so implied
-    relationships are reconstructed without round-tripping through text.
+    This uses JSON deserialization as a multi-document project followed by
+    semantic resolution so implied relationships are reconstructed without
+    round-tripping through text.
     Returns (change_payload, json_string), matching convert_sysml_*_to_json.
     """
     if isinstance(minimal_json, (dict, list)):
-        json_in = json.dumps(minimal_json, ensure_ascii=False)
-    elif isinstance(minimal_json, str):
         json_in = minimal_json
+    elif isinstance(minimal_json, str):
+        json_in = json.loads(minimal_json)
     else:
         raise TypeError(
             f"minimal_json must be dict/list/str, got {type(minimal_json).__name__}"
         )
 
-    from .core_multi_namespace import find_root_namespaces, make_root_namespace_first
+    from .core_multi_namespace import _split_root_namespace_documents
 
-    first_root_index, _first_root = find_root_namespaces(json_in)[0]
-    json_import = make_root_namespace_first(json_in, first_root_index)
-    deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
+    document_chunks = _split_root_namespace_documents(json_in)
+    document_sources = [
+        (f"memory:///{root_name}", chunk_json)
+        for root_name, chunk_json in document_chunks
+    ]
+    _project_model, deserialized_results = syside.json.loads(document_sources)
 
     env = syside.Environment.get_default()
     id_map = syside.IdMap()
@@ -442,23 +453,39 @@ def expand_minimal_json_to_full_json_model(minimal_json) -> tuple:
         with mutex.lock() as dep:
             id_map.insert_or_assign(dep)
 
-    deserialized_model.link(id_map)
+    documents_to_resolve = []
+    for deserialized_model, _report in deserialized_results:
+        documents_to_resolve.append(deserialized_model.document)
+        with deserialized_model.document.mutex.lock() as locked_document:
+            id_map.insert_or_assign(locked_document)
+
+    for deserialized_model, _report in deserialized_results:
+        deserialized_model.link(id_map)
 
     sema = syside.Sema()
     sema.resolve(
-        [deserialized_model.document],
+        documents_to_resolve,
         env.index(),
         env.lib,
     )
 
-    writer = _create_json_writer()
     options = _create_serialization_options()
-    with deserialized_model.document.mutex.lock() as locked:
-        syside.serialize(locked.root_node, writer, options)
-        json_string = writer.result
+    expanded_elements = []
+    for (root_name, _chunk_json), (deserialized_model, _report) in zip(
+        document_chunks,
+        deserialized_results,
+    ):
+        writer = _create_json_writer()
+        with deserialized_model.document.mutex.lock() as locked_document:
+            syside.serialize(locked_document.root_node, writer, options)
+        full_json_elements = _apply_root_namespace_name(
+            json.loads(writer.result),
+            root_name,
+        )
+        expanded_elements.extend(full_json_elements)
 
-    data = json.loads(json_string)
-    return _wrap_elements_as_payload(data), json_string
+    json_string = json.dumps(expanded_elements, indent=2)
+    return _wrap_elements_as_payload(expanded_elements), json_string
 
 def _children_iter(elem):
     children = getattr(elem, "owned_elements", None)

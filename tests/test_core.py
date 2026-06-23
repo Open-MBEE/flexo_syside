@@ -13,7 +13,7 @@ import sys
 import syside
 import pathlib
 import types
-from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_files_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual, expand_minimal_json_to_full_json
+from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_files_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual, expand_minimal_json_to_full_json, expand_minimal_json_to_full_json_model
 from flexo_syside_lib.core_multi_namespace import convert_json_to_sysml_textual_multi_namespace
 
 from pathlib import Path
@@ -32,6 +32,26 @@ def _canonical_namespace_models(json_text: str) -> dict[str, str]:
         namespace_name: _normalize_roundtrip_sysml_text(sysml_text)
         for namespace_name, sysml_text in namespace_models
     }
+
+
+def _canonicalize_json_value(value):
+    if isinstance(value, dict):
+        return {
+            key: _canonicalize_json_value(val)
+            for key, val in sorted(value.items())
+        }
+    if isinstance(value, list):
+        canonical_items = [_canonicalize_json_value(item) for item in value]
+        if all(isinstance(item, dict) and "@id" in item for item in canonical_items):
+            return sorted(canonical_items, key=lambda item: item["@id"])
+        return canonical_items
+    return value
+
+
+def _canonicalize_json_elements(json_text: str) -> list[dict]:
+    elements = json.loads(json_text)
+    canonical_elements = [_canonicalize_json_value(element) for element in elements]
+    return sorted(canonical_elements, key=lambda element: element.get("@id", ""))
 
 
 class TestUtilityFunctions:
@@ -369,6 +389,26 @@ class TestUtilityFunctions:
             alpha_path.unlink(missing_ok=True)
             beta_path.unlink(missing_ok=True)
 
+    def test_expand_minimal_json_to_full_json_model_preserves_multi_root_filenames(self):
+        model_file_paths = [
+            MULTI_NAMESPACE_DIR / "FlashlightStarterModel.sysml",
+            MULTI_NAMESPACE_DIR / "FlashlightContextClassExercise.sysml",
+            MULTI_NAMESPACE_DIR / "GeneralConcepts.sysml",
+        ]
+
+        _, raw_json_min = convert_sysml_files_textual_to_json(
+            sysml_file_paths=model_file_paths,
+            minimal=True,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+        assert _canonical_namespace_models(raw_json_expanded) == _canonical_namespace_models(
+            convert_sysml_files_textual_to_json(
+                sysml_file_paths=model_file_paths,
+                minimal=False,
+            )[1]
+        )
+
     def test_flashlight_single_min_json_roundtrip_text_identity(self):
         model_file_path = TEST_DIR / "Flashlight.sysml"
 
@@ -473,6 +513,98 @@ class TestUtilityFunctions:
         _, raw_json_expanded = expand_minimal_json_to_full_json(raw_json_min)
 
         assert _canonical_namespace_models(raw_json_full) == _canonical_namespace_models(raw_json_expanded)
+
+    @pytest.mark.xfail(
+        reason=(
+            "expand_minimal_json_to_full_json_model() currently recreates the "
+            "Flashlight model textually but does not produce byte-equivalent "
+            "full JSON compared to direct textual serialization."
+        ),
+        strict=True,
+    )
+    def test_flashlight_single_expand_model_full_json_matches_direct_full_json(self):
+        model_file_path = TEST_DIR / "Flashlight.sysml"
+
+        _, raw_json_full = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=False,
+        )
+        _, raw_json_min = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=True,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+        assert _canonicalize_json_elements(raw_json_expanded) == _canonicalize_json_elements(
+            raw_json_full
+        )
+
+    @pytest.mark.xfail(
+        reason=(
+            "expand_minimal_json_to_full_json_model() currently recreates the "
+            "multi-file Flashlight model textually but does not produce "
+            "byte-equivalent full JSON compared to direct textual serialization."
+        ),
+        strict=True,
+    )
+    def test_flashlight_multi_expand_model_full_json_matches_direct_full_json(self):
+        model_file_paths = [
+            MULTI_NAMESPACE_DIR / "FlashlightStarterModel.sysml",
+            MULTI_NAMESPACE_DIR / "FlashlightContextClassExercise.sysml",
+            MULTI_NAMESPACE_DIR / "GeneralConcepts.sysml",
+        ]
+
+        _, raw_json_full = convert_sysml_files_textual_to_json(
+            sysml_file_paths=model_file_paths,
+            minimal=False,
+        )
+        _, raw_json_min = convert_sysml_files_textual_to_json(
+            sysml_file_paths=model_file_paths,
+            minimal=True,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+        assert _canonicalize_json_elements(raw_json_expanded) == _canonicalize_json_elements(
+            raw_json_full
+        )
+
+    def test_flashlight_single_expand_model_full_json_recreates_original_sysml_file(self):
+        model_file_path = TEST_DIR / "Flashlight.sysml"
+
+        _, raw_json_full = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=False,
+        )
+        _, raw_json_min = convert_sysml_file_textual_to_json(
+            sysml_file_path=model_file_path,
+            minimal=True,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+        assert _canonical_namespace_models(raw_json_expanded) == _canonical_namespace_models(
+            raw_json_full
+        )
+
+    def test_flashlight_multi_expand_model_full_json_recreates_original_sysml_files(self):
+        model_file_paths = [
+            MULTI_NAMESPACE_DIR / "FlashlightStarterModel.sysml",
+            MULTI_NAMESPACE_DIR / "FlashlightContextClassExercise.sysml",
+            MULTI_NAMESPACE_DIR / "GeneralConcepts.sysml",
+        ]
+
+        _, raw_json_full = convert_sysml_files_textual_to_json(
+            sysml_file_paths=model_file_paths,
+            minimal=False,
+        )
+        _, raw_json_min = convert_sysml_files_textual_to_json(
+            sysml_file_paths=model_file_paths,
+            minimal=True,
+        )
+        _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+        assert _canonical_namespace_models(raw_json_expanded) == _canonical_namespace_models(
+            raw_json_full
+        )
 
 
 class TestSysIDEIntegration:

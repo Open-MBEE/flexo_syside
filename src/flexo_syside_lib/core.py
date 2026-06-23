@@ -126,30 +126,45 @@ def _create_serialization_options() -> syside.SerializationOptions:
     
     return options
 
-def _model_to_json (model:syside.Model, minimal:bool=False):
-    # Export the model to JSON
-    assert len(model.user_docs) == 1
+def _model_to_json(
+    model:syside.Model,
+    minimal:bool=False,
+    set_rootnamespace_date:bool=False,
+    root_namespace_names:list[str] | None = None,
+):
+    # Export each user document separately, then concatenate the serialized elements.
+    assert len(model.user_docs) >= 1
+    if root_namespace_names is not None:
+        assert len(root_namespace_names) == len(model.user_docs)
 
-    writer = _create_json_writer()
     if minimal:
         options = syside.SerializationOptions.minimal()
     else:
-        options =_create_serialization_options()
+        options = _create_serialization_options()
 
-    with model.user_docs[0].lock() as locked:
-        syside.serialize(locked.root_node, writer, options)
-        json_string = writer.result
+    serialized_elements = []
+    root_namespace_count = 0
 
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for doc_index, doc_mutex in enumerate(model.user_docs):
+        writer = _create_json_writer()
+        with doc_mutex.lock() as locked:
+            syside.serialize(locked.root_node, writer, options)
+        doc_elements = json.loads(writer.result)
+        for element in doc_elements:
+            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
+                if root_namespace_names is not None:
+                    element["qualifiedName"] = root_namespace_names[doc_index]
+                elif set_rootnamespace_date:
+                    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                    element["qualifiedName"] = now_str
+                    root_namespace_count += 1
+                break
+        serialized_elements.extend(doc_elements)
 
-    obj = json.loads(json_string)
-    for element in obj:
-        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
-            element["qualifiedName"] = now_str   # set the value here
-            #print(element)
-            break
-            
-    return json.dumps(obj, indent=2)
+    if set_rootnamespace_date:
+        assert root_namespace_count == len(model.user_docs)
+
+    return json.dumps(serialized_elements, indent=2)
 
 
 def convert_sysml_file_textual_to_json(sysml_file_path:str, json_out_path:str = None, minimal:bool=False) -> str:
@@ -160,7 +175,32 @@ def convert_sysml_file_textual_to_json(sysml_file_path:str, json_out_path:str = 
     # informational messages
     assert not diagnostics.contains_errors(warnings_as_errors=True)
 
-    json_string = _model_to_json(model, minimal)
+    json_string = _model_to_json(
+        model,
+        minimal,
+        root_namespace_names=[Path(sysml_file_path).name],
+    )
+    if json_out_path is not None:
+        with open(json_out_path, "w", encoding="utf-8") as f:
+            f.write(json_string)
+
+    data = json.loads(json_string)
+    return _wrap_elements_as_payload(data), json_string
+
+
+def convert_sysml_files_textual_to_json(sysml_file_paths:list[str], json_out_path:str = None, minimal:bool=False) -> str:
+    # load multiple SysML textual files and create a single JSON dump with one root namespace per file
+    model, diagnostics = syside.try_load_model(sysml_file_paths)
+
+    # Only errors cause an exception. SysIDE may also report warnings and
+    # informational messages
+    assert not diagnostics.contains_errors(warnings_as_errors=True)
+
+    json_string = _model_to_json(
+        model,
+        minimal,
+        root_namespace_names=[Path(sysml_file_path).name for sysml_file_path in sysml_file_paths],
+    )
     if json_out_path is not None:
         with open(json_out_path, "w", encoding="utf-8") as f:
             f.write(json_string)
@@ -175,7 +215,11 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
     # informational messages
     assert not diagnostics.contains_errors(warnings_as_errors=True)
 
-    json_string = _model_to_json(model, minimal)
+    json_string = _model_to_json(
+        model,
+        minimal,
+        root_namespace_names=[Path(sysml_file_path).name for sysml_file_path in sysml_file_paths],
+    )
     if json_out_path is not None:
         with open(json_out_path, "w", encoding="utf-8") as f:
             f.write(json_string)
@@ -278,8 +322,6 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
             # Not a syside deserialization error; re-raise (or handle differently)
             raise
         
-#    assert success, str(report.messages)
- 
     # Save the deserialized model to a file
     root_namespace = deserialized_model.document.root_node
     printer_cfg = syside.PrinterConfig(line_width=80, tab_width=2)
@@ -288,7 +330,17 @@ def convert_json_to_sysml_textual(json_flexo:str, debug:bool=False):
 
     return (sysml_text, deserialized_model), captured_warnings
 
-def expand_minimal_json_to_full_json(minimal_json) -> tuple:
+def expand_minimal_json_to_full_json(minimal_json:str) -> tuple:
+    """
+    Expand minimal SysML JSON into the repository's current non-minimal JSON form.
+
+    This uses JSON deserialization followed by with round-tripping through text.
+    Returns (change_payload, json_string), matching convert_sysml_*_to_json.
+    """
+    (sysml_text, deserialized_model), captured_warnings = convert_json_to_sysml_textual(minimal_json)
+    return convert_sysml_string_textual_to_json(sysml_model_string=sysml_text, minimal=False)
+
+def expand_minimal_json_to_full_json_model(minimal_json) -> tuple:
     """
     Expand minimal SysML JSON into the repository's current non-minimal JSON form.
 

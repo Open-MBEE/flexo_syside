@@ -13,7 +13,7 @@ import sys
 import syside
 import pathlib
 import types
-from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual, expand_minimal_json_to_full_json
+from flexo_syside_lib.core import convert_sysml_file_textual_to_json, convert_sysml_files_textual_to_json, convert_sysml_string_textual_to_json, convert_json_to_sysml_textual, expand_minimal_json_to_full_json
 
 from pathlib import Path
 TEST_DIR = Path(__file__).resolve().parent
@@ -464,9 +464,76 @@ class TestSysIDEIntegration:
                 parsed_json = json.loads(json_string)
                 assert isinstance(parsed_json, list)
                 assert len(parsed_json) > 0
+                root_namespaces = [
+                    element for element in parsed_json
+                    if element["@type"] == "Namespace" and "owningRelationship" not in element
+                ]
+                assert root_namespaces[0]["qualifiedName"] == os.path.basename(temp_file)
                 
             finally:
                 os.unlink(temp_file)
+
+    @patch('flexo_syside_lib.core.syside')
+    def test_convert_sysml_files_to_json(self, mock_syside):
+        """Test converting multiple SysML files to one JSON array with multiple roots."""
+        sample_doc_1 = [
+            {"@id": "ns1", "@type": "Namespace", "name": "Alpha"},
+            {"@id": "pkg1", "@type": "Package", "declaredName": "Alpha"},
+        ]
+        sample_doc_2 = [
+            {"@id": "ns2", "@type": "Namespace", "name": "Beta"},
+            {"@id": "pkg2", "@type": "Package", "declaredName": "Beta"},
+        ]
+
+        mock_model = Mock()
+        mock_diagnostics = Mock()
+        mock_diagnostics.contains_errors.return_value = False
+        mock_syside.try_load_model.return_value = (mock_model, mock_diagnostics)
+
+        locked_1 = Mock()
+        locked_1.root_node = Mock()
+        ctx_1 = Mock()
+        ctx_1.__enter__ = Mock(return_value=locked_1)
+        ctx_1.__exit__ = Mock(return_value=None)
+
+        locked_2 = Mock()
+        locked_2.root_node = Mock()
+        ctx_2 = Mock()
+        ctx_2.__enter__ = Mock(return_value=locked_2)
+        ctx_2.__exit__ = Mock(return_value=None)
+
+        doc_1 = Mock()
+        doc_1.lock.return_value = ctx_1
+        doc_2 = Mock()
+        doc_2.lock.return_value = ctx_2
+        mock_model.user_docs = [doc_1, doc_2]
+
+        writer_1 = Mock()
+        writer_1.result = json.dumps(sample_doc_1)
+        writer_2 = Mock()
+        writer_2.result = json.dumps(sample_doc_2)
+
+        mock_options = Mock()
+
+        with patch('flexo_syside_lib.core._create_json_writer', side_effect=[writer_1, writer_2]), \
+             patch('flexo_syside_lib.core._create_serialization_options', return_value=mock_options), \
+             patch('flexo_syside_lib.core.syside.serialize'):
+
+            payload, json_string = convert_sysml_files_textual_to_json(
+                ["alpha.sysml", "beta.sysml"]
+            )
+
+            parsed_json = json.loads(json_string)
+
+            assert [element["@id"] for element in parsed_json] == ["ns1", "pkg1", "ns2", "pkg2"]
+            assert [element["name"] for element in parsed_json if element["@type"] == "Namespace"] == ["Alpha", "Beta"]
+            assert [
+                element["qualifiedName"]
+                for element in parsed_json
+                if element["@type"] == "Namespace" and "owningRelationship" not in element
+            ] == ["alpha.sysml", "beta.sysml"]
+            assert isinstance(payload, list)
+            assert len(payload) == 4
     
     def test_convert_json_to_sysml_textual_invalid_input(self):
         """Test converting invalid input to SysML textual."""

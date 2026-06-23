@@ -215,11 +215,7 @@ def convert_sysml_string_textual_to_json(sysml_model_string:str, json_out_path:s
     # informational messages
     assert not diagnostics.contains_errors(warnings_as_errors=True)
 
-    json_string = _model_to_json(
-        model,
-        minimal,
-        root_namespace_names=[Path(sysml_file_path).name for sysml_file_path in sysml_file_paths],
-    )
+    json_string = _model_to_json(model, minimal)
     if json_out_path is not None:
         with open(json_out_path, "w", encoding="utf-8") as f:
             f.write(json_string)
@@ -337,8 +333,85 @@ def expand_minimal_json_to_full_json(minimal_json:str) -> tuple:
     This uses JSON deserialization followed by with round-tripping through text.
     Returns (change_payload, json_string), matching convert_sysml_*_to_json.
     """
-    (sysml_text, deserialized_model), captured_warnings = convert_json_to_sysml_textual(minimal_json)
-    return convert_sysml_string_textual_to_json(sysml_model_string=sysml_text, minimal=False)
+    from .core_multi_namespace import (
+        _split_root_namespace_documents,
+        convert_json_to_sysml_textual_multi_namespace,
+        get_root_namespace_names,
+    )
+
+    def _apply_root_namespace_name(full_json_elements: list[dict], root_name: str) -> list[dict]:
+        for element in full_json_elements:
+            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
+                element["qualifiedName"] = root_name
+                break
+        return full_json_elements
+
+    def _expand_namespace_model(
+        root_name: str,
+        sysml_text: str,
+        minimal_document_json: Any,
+    ) -> list[dict]:
+        try:
+            _, full_json_string = convert_sysml_string_textual_to_json(
+                sysml_model_string=sysml_text,
+                minimal=False,
+            )
+        except Exception:
+            _, full_json_string = expand_minimal_json_to_full_json_model(minimal_document_json)
+
+        return _apply_root_namespace_name(json.loads(full_json_string), root_name)
+
+    if isinstance(minimal_json, (dict, list)):
+        json_in = minimal_json
+    elif isinstance(minimal_json, str):
+        json_in = json.loads(minimal_json)
+    else:
+        raise TypeError(
+            f"minimal_json must be dict/list/str, got {type(minimal_json).__name__}"
+        )
+
+    root_namespace_names = get_root_namespace_names(json_in)
+
+    if len(root_namespace_names) == 1:
+        json_single_root = json.loads(json.dumps(json_in, ensure_ascii=False))
+        if isinstance(json_single_root, dict):
+            json_single_root = [json_single_root]
+        for element in json_single_root:
+            if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
+                element["qualifiedName"] = None
+                break
+
+        (sysml_text, _deserialized_model), captured_warnings = convert_json_to_sysml_textual(json_single_root)
+        del captured_warnings
+        expanded_elements = _expand_namespace_model(
+            root_namespace_names[0],
+            sysml_text,
+            json_single_root,
+        )
+    else:
+        document_chunks = _split_root_namespace_documents(json_in)
+        document_sources = [
+            (f"memory:///{root_name}", chunk_json)
+            for root_name, chunk_json in document_chunks
+        ]
+        _project_model, deserialized_results = syside.json.loads(document_sources)
+        options = _create_serialization_options()
+        expanded_elements = []
+        for (root_name, _chunk_json), (deserialized_model, _report) in zip(
+            document_chunks,
+            deserialized_results,
+        ):
+            writer = _create_json_writer()
+            with deserialized_model.document.mutex.lock() as locked_document:
+                syside.serialize(locked_document.root_node, writer, options)
+            full_json_elements = _apply_root_namespace_name(
+                json.loads(writer.result),
+                root_name,
+            )
+            expanded_elements.extend(full_json_elements)
+
+    expanded_json_string = json.dumps(expanded_elements, indent=2)
+    return _wrap_elements_as_payload(expanded_elements), expanded_json_string
 
 def expand_minimal_json_to_full_json_model(minimal_json) -> tuple:
     """
@@ -357,7 +430,10 @@ def expand_minimal_json_to_full_json_model(minimal_json) -> tuple:
             f"minimal_json must be dict/list/str, got {type(minimal_json).__name__}"
         )
 
-    json_import = _make_root_namespace_first(json_in)
+    from .core_multi_namespace import find_root_namespaces, make_root_namespace_first
+
+    first_root_index, _first_root = find_root_namespaces(json_in)[0]
+    json_import = make_root_namespace_first(json_in, first_root_index)
     deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
 
     env = syside.Environment.get_default()
@@ -381,14 +457,6 @@ def expand_minimal_json_to_full_json_model(minimal_json) -> tuple:
         syside.serialize(locked.root_node, writer, options)
         json_string = writer.result
 
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    obj = json.loads(json_string)
-    for element in obj:
-        if element.get(ELEMENT_TYPE_KEY) == "Namespace" and "owningRelationship" not in element:
-            element["qualifiedName"] = now_str
-            break
-
-    json_string = json.dumps(obj, indent=2)
     data = json.loads(json_string)
     return _wrap_elements_as_payload(data), json_string
 

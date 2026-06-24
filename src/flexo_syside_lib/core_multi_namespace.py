@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Tuple
 
 import syside
 
-from .core import ELEMENT_TYPE_KEY
+from .payload import ELEMENT_TYPE_KEY
 from .utils2 import print_serde_report
 
 

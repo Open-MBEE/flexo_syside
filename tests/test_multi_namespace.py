@@ -75,6 +75,61 @@ def test_split_root_namespace_documents_groups_interleaved_elements_by_ownership
     assert [element["@id"] for element in json.loads(documents[1][1])] == ["ns-2", "rel-2", "pkg-2"]
 
 
+def test_split_root_namespace_documents_infers_root_from_ownership_related_fields():
+    data = [
+        {"@id": "ns-1", "@type": "Namespace", "qualifiedName": "alpha.sysml"},
+        {"@id": "pkg-1", "@type": "Package", "declaredName": "Alpha"},
+        {
+            "@id": "rel-1",
+            "@type": "OwningMembership",
+            "owningRelatedElement": {"@id": "ns-1"},
+            "ownedRelatedElement": [{"@id": "pkg-1"}],
+            "memberElement": {"@id": "pkg-1"},
+        },
+        {"@id": "ns-2", "@type": "Namespace", "qualifiedName": "beta.sysml"},
+    ]
+
+    documents = _split_root_namespace_documents(data)
+
+    assert [name for name, _ in documents] == ["alpha.sysml", "beta.sysml"]
+    assert [element["@id"] for element in json.loads(documents[0][1])] == ["ns-1", "rel-1", "pkg-1"]
+    assert [element["@id"] for element in json.loads(documents[1][1])] == ["ns-2"]
+
+
+def test_split_root_namespace_documents_falls_back_to_position_for_sparse_elements():
+    data = [
+        {"@id": "ns-1", "@type": "Namespace", "qualifiedName": "alpha.sysml"},
+        {"@id": "el-1", "@type": "Package", "declaredName": "Alpha"},
+        {"@id": "ns-2", "@type": "Namespace", "qualifiedName": "beta.sysml"},
+        {"@id": "el-2", "@type": "Package", "declaredName": "Beta"},
+    ]
+
+    documents = _split_root_namespace_documents(data)
+
+    assert [name for name, _ in documents] == ["alpha.sysml", "beta.sysml"]
+    assert [element["@id"] for element in json.loads(documents[0][1])] == ["ns-1", "el-1"]
+    assert [element["@id"] for element in json.loads(documents[1][1])] == ["ns-2", "el-2"]
+
+
+def test_split_root_namespace_documents_moves_root_to_front_within_document():
+    data = [
+        {"@id": "pkg-1", "@type": "Package", "declaredName": "Alpha"},
+        {
+            "@id": "rel-1",
+            "@type": "OwningMembership",
+            "owningRelatedElement": {"@id": "ns-1"},
+            "ownedRelatedElement": [{"@id": "pkg-1"}],
+            "memberElement": {"@id": "pkg-1"},
+        },
+        {"@id": "ns-1", "@type": "Namespace", "qualifiedName": "alpha.sysml"},
+    ]
+
+    documents = _split_root_namespace_documents(data)
+
+    assert [name for name, _ in documents] == ["alpha.sysml"]
+    assert [element["@id"] for element in json.loads(documents[0][1])] == ["ns-1", "rel-1", "pkg-1"]
+
+
 @patch("flexo_syside_lib.core_multi_namespace.syside")
 def test_convert_json_to_sysml_textual_multi_namespace_returns_tuple_per_root(mock_syside):
     data = [

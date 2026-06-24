@@ -89,11 +89,29 @@ def _extract_reference_id(value: Any) -> str | None:
     return None
 
 
+def _extract_reference_ids(value: Any) -> List[str]:
+    if isinstance(value, dict):
+        ref_id = _extract_reference_id(value)
+        return [ref_id] if ref_id is not None else []
+    if isinstance(value, list):
+        result: List[str] = []
+        for item in value:
+            result.extend(_extract_reference_ids(item))
+        return result
+    ref_id = _extract_reference_id(value)
+    return [ref_id] if ref_id is not None else []
+
+
 def _split_root_namespace_documents(
     json_flexo: Any,
 ) -> List[Tuple[str, str]]:
     elements = _normalize_json_input(json_flexo)
     roots = find_root_namespaces(elements)
+    root_indices_by_id = {
+        root_element["@id"]: root_index
+        for root_index, root_element in roots
+        if isinstance(root_element.get("@id"), str)
+    }
     root_ids_in_order = [
         element_id
         for _index, root_element in roots
@@ -110,11 +128,39 @@ def _split_root_namespace_documents(
         for element in elements
         if isinstance(element, dict) and isinstance(element.get("@id"), str)
     }
+    ownership_reference_keys = (
+        "owningRelatedElement",
+        "ownedRelatedElement",
+        "memberElement",
+        "feature",
+        "ownedMember",
+        "ownedMemberElement",
+        "ownedMemberFeature",
+        "ownedElement",
+        "owningNamespace",
+        "owningType",
+        "featuringType",
+        "typedFeature",
+    )
+    incoming_ownership_refs: Dict[str, List[str]] = {}
+    for owner_id, owner_element in elements_by_id.items():
+        for key in ownership_reference_keys:
+            for referenced_id in _extract_reference_ids(owner_element.get(key)):
+                incoming_ownership_refs.setdefault(referenced_id, []).append(owner_id)
     resolved_root_by_id: Dict[str, str | None] = {}
 
-    def resolve_root_id(element_id: str) -> str | None:
+    def resolve_root_id(
+        element_id: str,
+        active_ids: set[str] | None = None,
+    ) -> str | None:
         if element_id in resolved_root_by_id:
             return resolved_root_by_id[element_id]
+        if active_ids is None:
+            active_ids = set()
+        if element_id in active_ids:
+            return None
+        active_ids = set(active_ids)
+        active_ids.add(element_id)
 
         visited: List[str] = []
         current_id: str | None = element_id
@@ -135,7 +181,25 @@ def _split_root_namespace_documents(
             if _is_root_namespace(current_element):
                 root_id = current_id
                 break
-            current_id = _extract_reference_id(current_element.get("owningRelationship"))
+            owning_relationship_id = _extract_reference_id(
+                current_element.get("owningRelationship")
+            )
+            if owning_relationship_id is not None:
+                current_id = owning_relationship_id
+                continue
+
+            candidate_root_ids = {
+                candidate_root_id
+                for key in ownership_reference_keys
+                for referenced_id in _extract_reference_ids(current_element.get(key))
+                for candidate_root_id in [resolve_root_id(referenced_id, active_ids)]
+                if candidate_root_id is not None
+            }
+            if len(candidate_root_ids) == 1:
+                root_id = next(iter(candidate_root_ids))
+            else:
+                root_id = None
+            break
 
         for visited_id in visited:
             resolved_root_by_id[visited_id] = root_id
@@ -159,13 +223,77 @@ def _split_root_namespace_documents(
             continue
         document_elements_by_root_id[root_id].append(element)
 
+    # Second pass: infer root from incoming ownership-like relationships that point at
+    # the element, e.g. membership elements that reference their members.
+    changed = True
+    while changed and unassigned_elements:
+        changed = False
+        still_unassigned: List[Dict[str, Any]] = []
+        for element in unassigned_elements:
+            element_id = _extract_reference_id(element.get("@id"))
+            if element_id is None:
+                still_unassigned.append(element)
+                continue
+
+            candidate_root_ids = {
+                candidate_root_id
+                for owner_id in incoming_ownership_refs.get(element_id, [])
+                for candidate_root_id in [resolve_root_id(owner_id)]
+                if candidate_root_id is not None
+            }
+            if len(candidate_root_ids) != 1:
+                still_unassigned.append(element)
+                continue
+
+            inferred_root_id = next(iter(candidate_root_ids))
+            document_elements_by_root_id[inferred_root_id].append(element)
+            resolved_root_by_id[element_id] = inferred_root_id
+            changed = True
+
+        unassigned_elements = still_unassigned
+
+    # Last-resort fallback for valid elements that do not expose ownership links directly.
+    # Use their original position relative to root namespaces, which matches our own serializer
+    # and remains a pragmatic fallback for Flexo server responses with sparse ownership fields.
+    still_unassigned: List[Dict[str, Any]] = []
+    for element in unassigned_elements:
+        try:
+            element_index = elements.index(element)
+        except ValueError:
+            still_unassigned.append(element)
+            continue
+
+        fallback_root_id: str | None = None
+        for root_id, root_index in sorted(
+            root_indices_by_id.items(), key=lambda item: item[1]
+        ):
+            if root_index <= element_index:
+                fallback_root_id = root_id
+            else:
+                break
+
+        if fallback_root_id is None:
+            still_unassigned.append(element)
+            continue
+        document_elements_by_root_id[fallback_root_id].append(element)
+
+    unassigned_elements = still_unassigned
+
     documents: List[Tuple[str, str]] = []
     for _root_index, root_namespace in roots:
         root_id = root_namespace.get("@id")
         if not isinstance(root_id, str):
             continue
         root_name = root_names_by_id[root_id]
-        document_elements = document_elements_by_root_id[root_id]
+        document_elements = list(document_elements_by_root_id[root_id])
+        root_positions = [
+            index
+            for index, element in enumerate(document_elements)
+            if _extract_reference_id(element.get("@id")) == root_id
+        ]
+        if root_positions:
+            root_position = root_positions[0]
+            document_elements.insert(0, document_elements.pop(root_position))
         if document_elements:
             documents.append((root_name, json.dumps(document_elements, ensure_ascii=False)))
 

@@ -149,9 +149,18 @@ def _split_root_namespace_documents(
                 incoming_ownership_refs.setdefault(referenced_id, []).append(owner_id)
     resolved_root_by_id: Dict[str, str | None] = {}
 
-    def resolve_root_id(element_id: str) -> str | None:
+    def resolve_root_id(
+        element_id: str,
+        active_ids: set[str] | None = None,
+    ) -> str | None:
         if element_id in resolved_root_by_id:
             return resolved_root_by_id[element_id]
+        if active_ids is None:
+            active_ids = set()
+        if element_id in active_ids:
+            return None
+        active_ids = set(active_ids)
+        active_ids.add(element_id)
 
         visited: List[str] = []
         current_id: str | None = element_id
@@ -183,7 +192,7 @@ def _split_root_namespace_documents(
                 candidate_root_id
                 for key in ownership_reference_keys
                 for referenced_id in _extract_reference_ids(current_element.get(key))
-                for candidate_root_id in [resolve_root_id(referenced_id)]
+                for candidate_root_id in [resolve_root_id(referenced_id, active_ids)]
                 if candidate_root_id is not None
             }
             if len(candidate_root_ids) == 1:

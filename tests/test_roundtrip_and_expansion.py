@@ -7,6 +7,7 @@ from flexo_syside_lib.core import (
     convert_json_to_sysml_textual,
     convert_sysml_file_textual_to_json,
     convert_sysml_files_textual_to_json,
+    convert_sysml_models_textual_to_json,
     convert_sysml_string_textual_to_json,
     expand_minimal_json_to_full_json,
     expand_minimal_json_to_full_json_model,
@@ -71,6 +72,31 @@ def test_serialize_deserialize_string_input():
     (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
     del model, warnings
     assert sysml_text is not None
+
+
+def test_convert_sysml_models_textual_to_json_matches_file_based_multi_conversion():
+    model_file_paths = [
+        MULTI_NAMESPACE_DIR / "FlashlightStarterModel.sysml",
+        MULTI_NAMESPACE_DIR / "FlashlightContextClassExercise.sysml",
+        MULTI_NAMESPACE_DIR / "GeneralConcepts.sysml",
+    ]
+    sysml_models = [
+        (path.name, path.read_text(encoding="utf-8"))
+        for path in model_file_paths
+    ]
+
+    _, raw_json_from_files = convert_sysml_files_textual_to_json(
+        model_file_paths,
+        minimal=False,
+    )
+    _, raw_json_from_models = convert_sysml_models_textual_to_json(
+        sysml_models,
+        minimal=False,
+    )
+
+    assert canonical_namespace_models(raw_json_from_models) == canonical_namespace_models(
+        raw_json_from_files
+    )
 
 
 def test_expand_minimal_json_to_full_json_restores_implied_relationships():

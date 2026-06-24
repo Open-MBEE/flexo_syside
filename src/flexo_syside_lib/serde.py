@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import warnings
 from datetime import datetime, timezone
 from pathlib import Path
@@ -161,6 +163,44 @@ def convert_sysml_files_textual_to_json(
 
     data = json.loads(json_string)
     return wrap_elements_as_payload(data), json_string
+
+
+def convert_sysml_models_textual_to_json(
+    sysml_models: list[tuple[str, str]],
+    json_out_path: str | None = None,
+    minimal: bool = False,
+) -> tuple[list[dict[str, Any]], str]:
+    if not sysml_models:
+        raise ValueError("sysml_models must not be empty")
+
+    basenames = [Path(filename).name for filename, _text in sysml_models]
+    if len(set(basenames)) != len(basenames):
+        raise ValueError("sysml_models filenames must be unique after basename normalization")
+
+    with tempfile.TemporaryDirectory(prefix="flexo_syside_models_") as tmp_dir:
+        temp_paths: list[str] = []
+        for index, (filename, sysml_text) in enumerate(sysml_models):
+            basename = Path(filename).name
+            suffix = Path(basename).suffix.lower()
+            if suffix not in {".sysml", ".kerml"}:
+                suffix = ".sysml"
+            temp_path = Path(tmp_dir) / f"{index:04d}_{Path(basename).stem}{suffix}"
+            temp_path.write_text(sysml_text, encoding="utf-8")
+            temp_paths.append(os.fspath(temp_path))
+        model, diagnostics = syside.try_load_model(temp_paths)
+        assert not diagnostics.contains_errors(warnings_as_errors=True)
+
+        json_string = model_to_json(
+            model,
+            minimal,
+            root_namespace_names=basenames,
+        )
+        if json_out_path is not None:
+            with open(json_out_path, "w", encoding="utf-8") as f:
+                f.write(json_string)
+
+        data = json.loads(json_string)
+        return wrap_elements_as_payload(data), json_string
 
 
 def convert_sysml_string_textual_to_json(

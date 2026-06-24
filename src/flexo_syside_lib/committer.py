@@ -8,76 +8,19 @@ Typical usage:
 """
 
 from __future__ import annotations
-from typing import Optional, Dict, Tuple
+from typing import Optional, Dict
 import os
-import pathlib
-from pprint import pprint
 
 from sysmlv2_client import SysMLV2Client
 from flexo_syside_lib.core import convert_sysml_string_textual_to_json
+from .config import DEFAULT_FLEXO_URL, default_base_and_token, load_env_from_repo_root
 from sysml_api.api_lib import (
     create_sysml_project,
     get_project_by_name,
     commit_to_project,
 )
 
-
-# === Constants ===
-DEFAULT_FLEXO_URL = "http://localhost:8080/"
 DEFAULT_PROJECT_NAME = "Flexo_SysIDE_TestProject"
-ENV_FILE = ".env"
-
-
-# === Environment Management ===
-def load_env_from_repo_root(filename: str = ENV_FILE) -> Optional[str]:
-    """
-    Load key=value pairs from a `.env` file located in the current directory
-    or any parent directory into `os.environ`.
-
-    Args:
-        filename: The name of the environment file to search for.
-
-    Returns:
-        The absolute path to the loaded `.env` file, or None if not found.
-    """
-    cwd = pathlib.Path(__file__).resolve().parent
-    for parent in [cwd] + list(cwd.parents):
-        env_path = parent / filename
-        if env_path.exists():
-            with env_path.open("r") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    key, value = line.split("=", 1)
-                    os.environ.setdefault(key.strip(), value.strip())
-
-            print(f"[ENV] Loaded environment variables from: {env_path}")
-            return str(env_path)
-
-    print("[ENV] No .env file found in repo hierarchy.")
-    return None
-
-
-def _default_base_and_token() -> Tuple[str, str]:
-    """
-    Construct the Flexo base URL and Bearer token from environment variables.
-
-    Returns:
-        (base_url, bearer_token) tuple.
-
-    Raises:
-        EnvironmentError: if FLEXO_API_KEY is not set.
-    """
-    api_key = os.getenv("FLEXO_API_KEY")
-    if not api_key:
-        raise EnvironmentError("Missing FLEXO_API_KEY environment variable.")
-
-    flexo_url = os.getenv("FLEXO_URL", DEFAULT_FLEXO_URL)
-    base_url = flexo_url.rstrip("/") + "/"
-    bearer_token = api_key if api_key.lower().startswith("bearer ") else f"Bearer {api_key}"
-
-    return base_url, bearer_token
 
 
 # === Core Commit Function ===
@@ -119,9 +62,12 @@ def commit_sysml_to_flexo(
     if not api_key:
         raise EnvironmentError("Missing FLEXO_API_KEY environment variable or function argument.")
 
-    flexo_url = flexo_url or os.getenv("FLEXO_URL", DEFAULT_FLEXO_URL)
-    base_url = flexo_url.rstrip("/") + "/"
-    bearer_token = api_key if api_key.lower().startswith("bearer ") else f"Bearer {api_key}"
+    if flexo_url is None and api_key == os.getenv("FLEXO_API_KEY"):
+        base_url, bearer_token = default_base_and_token()
+    else:
+        flexo_url = flexo_url or os.getenv("FLEXO_URL", DEFAULT_FLEXO_URL)
+        base_url = flexo_url.rstrip("/") + "/"
+        bearer_token = api_key if api_key.lower().startswith("bearer ") else f"Bearer {api_key}"
 
     if verbose:
         print(f"[Flexo] Base URL: {base_url}")
@@ -183,36 +129,3 @@ def commit_sysml_to_flexo(
         "created_project": created_project,
         "commit_response": commit_response,
     }
-
-
-# === Simple Test Harness ===
-def test_commit_to_flexo() -> None:
-    """Verify that a SysMLv2 snippet can be committed to the Flexo server."""
-    sysml_sample = """
-    package TestPackage {
-        part Satellite {
-            attribute mass = 500.0;
-        }
-    }
-    """
-    print("[TEST] Starting Flexo commit test...")
-    result = commit_sysml_to_flexo(
-        sysml_output=sysml_sample,
-        project_name=DEFAULT_PROJECT_NAME,
-        verbose=True,
-    )
-    print("\n[TEST RESULT]")
-    pprint(result)
-
-
-# === Entrypoint ===
-if __name__ == "__main__":
-    load_env_from_repo_root()
-
-    license_key = os.getenv("SYSIDE_LICENSE_KEY")
-    if not license_key:
-        raise EnvironmentError("Missing SYSIDE_LICENSE_KEY environment variable.")
-
-    syside_license.check(license_key)
-
-    test_commit_to_flexo()

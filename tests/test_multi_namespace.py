@@ -46,21 +46,41 @@ def test_make_root_namespace_first_moves_requested_root():
 def test_split_root_namespace_documents_preserves_document_chunks():
     data = [
         {"@id": "ns-1", "@type": "Namespace", "qualifiedName": "alpha.sysml"},
-        {"@id": "pkg-1", "@type": "Package", "declaredName": "Alpha"},
+        {"@id": "rel-1", "@type": "OwningMembership", "owningRelationship": {"@id": "ns-1"}},
+        {"@id": "pkg-1", "@type": "Package", "declaredName": "Alpha", "owningRelationship": {"@id": "rel-1"}},
         {"@id": "ns-2", "@type": "Namespace", "qualifiedName": "beta.sysml"},
-        {"@id": "pkg-2", "@type": "Package", "declaredName": "Beta"},
+        {"@id": "rel-2", "@type": "OwningMembership", "owningRelationship": {"@id": "ns-2"}},
+        {"@id": "pkg-2", "@type": "Package", "declaredName": "Beta", "owningRelationship": {"@id": "rel-2"}},
     ]
     documents = _split_root_namespace_documents(data)
     assert [name for name, _ in documents] == ["alpha.sysml", "beta.sysml"]
-    assert [element["@id"] for element in json.loads(documents[0][1])] == ["ns-1", "pkg-1"]
-    assert [element["@id"] for element in json.loads(documents[1][1])] == ["ns-2", "pkg-2"]
+    assert [element["@id"] for element in json.loads(documents[0][1])] == ["ns-1", "rel-1", "pkg-1"]
+    assert [element["@id"] for element in json.loads(documents[1][1])] == ["ns-2", "rel-2", "pkg-2"]
+
+
+def test_split_root_namespace_documents_groups_interleaved_elements_by_ownership():
+    data = [
+        {"@id": "ns-1", "@type": "Namespace", "qualifiedName": "alpha.sysml"},
+        {"@id": "ns-2", "@type": "Namespace", "qualifiedName": "beta.sysml"},
+        {"@id": "rel-1", "@type": "OwningMembership", "owningRelationship": {"@id": "ns-1"}},
+        {"@id": "rel-2", "@type": "OwningMembership", "owningRelationship": {"@id": "ns-2"}},
+        {"@id": "pkg-2", "@type": "Package", "declaredName": "Beta", "owningRelationship": {"@id": "rel-2"}},
+        {"@id": "pkg-1", "@type": "Package", "declaredName": "Alpha", "owningRelationship": {"@id": "rel-1"}},
+    ]
+
+    documents = _split_root_namespace_documents(data)
+
+    assert [name for name, _ in documents] == ["alpha.sysml", "beta.sysml"]
+    assert [element["@id"] for element in json.loads(documents[0][1])] == ["ns-1", "rel-1", "pkg-1"]
+    assert [element["@id"] for element in json.loads(documents[1][1])] == ["ns-2", "rel-2", "pkg-2"]
 
 
 @patch("flexo_syside_lib.core_multi_namespace.syside")
 def test_convert_json_to_sysml_textual_multi_namespace_returns_tuple_per_root(mock_syside):
     data = [
         {"@id": "ns-1", "@type": "Namespace", "name": "Alpha", "qualifiedName": "alpha.sysml"},
-        {"@id": "el-1", "@type": "PartDefinition"},
+        {"@id": "rel-1", "@type": "OwningMembership", "owningRelationship": {"@id": "ns-1"}},
+        {"@id": "el-1", "@type": "PartDefinition", "owningRelationship": {"@id": "rel-1"}},
         {"@id": "ns-2", "@type": "Namespace", "name": "Beta", "qualifiedName": "beta.sysml"},
     ]
 

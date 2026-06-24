@@ -71,18 +71,3 @@ def test_syside_element_projects_to_backend_key_template():
         templates,
     )
     assert set(projected.keys()) == set(_backend_subsetting().keys())
-
-
-def test_merge_against_recorded_flexo_and_syside_samples():
-    direct = json.load(open("/tmp/e-direct.json"))
-    proxy = json.load(open("/tmp/e-proxy.json"))
-    merged = merge_expanded_elements_for_api(direct, proxy)
-
-    assert merged[: len(direct)] == direct
-    assert len(merged) == len(direct) + 692
-    for original, preserved in zip(direct, merged):
-        assert original == preserved
-
-    new_elements = merged[len(direct) :]
-    assert all("qualifiedName" not in element for element in new_elements)
-    assert all("source" not in element for element in new_elements)

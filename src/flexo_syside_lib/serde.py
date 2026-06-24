@@ -183,6 +183,7 @@ def convert_sysml_string_textual_to_json(
 def convert_json_to_sysml_textual(
     json_flexo: Any,
     debug: bool = False,
+    make_root_namespace_first: bool = False,
 ) -> tuple[tuple[str, Any] | None, list[str]]:
     del debug
     captured_warnings: list[str] = []
@@ -199,7 +200,11 @@ def convert_json_to_sysml_textual(
                 f"json_flexo must be dict/list/str, got {type(json_flexo).__name__}"
             )
 
-        json_import = make_root_namespace_first_legacy(json_in)
+        json_import = (
+            make_root_namespace_first_legacy(json_in)
+            if make_root_namespace_first
+            else json_in
+        )
 
         try:
             deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")

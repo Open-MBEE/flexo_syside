@@ -80,18 +80,105 @@ def make_root_namespace_first(json_flexo: Any, root_index: int) -> str:
     return json.dumps(reordered, ensure_ascii=False)
 
 
+def _extract_reference_id(value: Any) -> str | None:
+    if isinstance(value, dict):
+        ref_id = value.get("@id")
+        return ref_id if isinstance(ref_id, str) and ref_id else None
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
 def _split_root_namespace_documents(
     json_flexo: Any,
 ) -> List[Tuple[str, str]]:
     elements = _normalize_json_input(json_flexo)
     roots = find_root_namespaces(elements)
-    documents: List[Tuple[str, str]] = []
+    root_ids_in_order = [
+        element_id
+        for _index, root_element in roots
+        for element_id in [_extract_reference_id(root_element.get("@id"))]
+        if element_id is not None
+    ]
+    root_names_by_id = {
+        root_element["@id"]: _root_namespace_name(root_element)
+        for _index, root_element in roots
+        if isinstance(root_element.get("@id"), str)
+    }
+    elements_by_id = {
+        element["@id"]: element
+        for element in elements
+        if isinstance(element, dict) and isinstance(element.get("@id"), str)
+    }
+    resolved_root_by_id: Dict[str, str | None] = {}
 
-    for idx, (root_index, root_namespace) in enumerate(roots):
-        next_root_index = roots[idx + 1][0] if idx + 1 < len(roots) else len(elements)
-        root_name = _root_namespace_name(root_namespace)
-        document_elements = elements[root_index:next_root_index]
-        documents.append((root_name, json.dumps(document_elements, ensure_ascii=False)))
+    def resolve_root_id(element_id: str) -> str | None:
+        if element_id in resolved_root_by_id:
+            return resolved_root_by_id[element_id]
+
+        visited: List[str] = []
+        current_id: str | None = element_id
+        root_id: str | None = None
+
+        while current_id is not None:
+            if current_id in resolved_root_by_id:
+                root_id = resolved_root_by_id[current_id]
+                break
+            if current_id in visited:
+                root_id = None
+                break
+            visited.append(current_id)
+            current_element = elements_by_id.get(current_id)
+            if current_element is None:
+                root_id = None
+                break
+            if _is_root_namespace(current_element):
+                root_id = current_id
+                break
+            current_id = _extract_reference_id(current_element.get("owningRelationship"))
+
+        for visited_id in visited:
+            resolved_root_by_id[visited_id] = root_id
+        return root_id
+
+    document_elements_by_root_id: Dict[str, List[Dict[str, Any]]] = {
+        root_id: [] for root_id in root_ids_in_order
+    }
+    unassigned_elements: List[Dict[str, Any]] = []
+
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        element_id = _extract_reference_id(element.get("@id"))
+        if element_id is None:
+            unassigned_elements.append(element)
+            continue
+        root_id = resolve_root_id(element_id)
+        if root_id is None or root_id not in document_elements_by_root_id:
+            unassigned_elements.append(element)
+            continue
+        document_elements_by_root_id[root_id].append(element)
+
+    documents: List[Tuple[str, str]] = []
+    for _root_index, root_namespace in roots:
+        root_id = root_namespace.get("@id")
+        if not isinstance(root_id, str):
+            continue
+        root_name = root_names_by_id[root_id]
+        document_elements = document_elements_by_root_id[root_id]
+        if document_elements:
+            documents.append((root_name, json.dumps(document_elements, ensure_ascii=False)))
+
+    if unassigned_elements:
+        unassigned_ids = [
+            element.get("@id")
+            for element in unassigned_elements
+            if isinstance(element.get("@id"), str)
+        ]
+        raise ValueError(
+            "Could not assign some elements to a root namespace via owningRelationship: "
+            + ", ".join(unassigned_ids[:10])
+        )
 
     return documents
 

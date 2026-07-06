@@ -318,7 +318,9 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
         warnings.simplefilter("always")
 
         try:
-            deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
+            _project_model, deserialized_results = syside.json.loads(
+                [("memory:///import.sysml", json_import)]
+            )
         except Exception as exc:
             try:
                 from syside.json import DeserializationError
@@ -339,10 +341,17 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
         for warning in wlist:
             captured_warnings.append(str(warning.message))
 
+    deserialized_model, _ = deserialized_results[0]
+
+    env = syside.Environment.get_default()
     id_map = syside.IdMap()
-    for mutex in syside.Environment.get_default().documents:
+    for mutex in env.documents:
         with mutex.lock() as dep:
             id_map.insert_or_assign(dep)
+
+    documents_to_resolve = [deserialized_model.document]
+    with deserialized_model.document.mutex.lock() as locked_document:
+        id_map.insert_or_assign(locked_document)
 
     try:
         deserialized_model.link(id_map)
@@ -361,6 +370,12 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
         else:
             raise
 
+    syside.Sema().resolve(
+        documents_to_resolve,
+        env.index(),
+        env.lib,
+    )
+
     root_namespace = deserialized_model.document.root_node
     printer_cfg = syside.PrinterConfig(line_width=80, tab_width=2)
     printer = syside.ModelPrinter.sysml()
@@ -371,9 +386,10 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
 def _deserialize_json_project_to_sysml_textual(
     json_flexo: Any,
 ) -> Tuple[List[Tuple[str, str]], List[str]]:
+    split_documents = _split_root_namespace_documents(json_flexo)
     document_sources = [
         (f"memory:///{root_name}", document_json)
-        for root_name, document_json in _split_root_namespace_documents(json_flexo)
+        for root_name, document_json in split_documents
     ]
 
     captured_warnings: List[str] = []
@@ -381,15 +397,34 @@ def _deserialize_json_project_to_sysml_textual(
 
     with warnings.catch_warnings(record=True) as wlist:
         warnings.simplefilter("always")
-        project_model, deserialized_results = syside.json.loads(document_sources)
+        _project_model, deserialized_results = syside.json.loads(document_sources)
 
         for warning in wlist:
             captured_warnings.append(str(warning.message))
 
-    del project_model
+    env = syside.Environment.get_default()
+    id_map = syside.IdMap()
+    for mutex in env.documents:
+        with mutex.lock() as dep:
+            id_map.insert_or_assign(dep)
+
+    documents_to_resolve = []
+    for deserialized_model, _report in deserialized_results:
+        documents_to_resolve.append(deserialized_model.document)
+        with deserialized_model.document.mutex.lock() as locked_document:
+            id_map.insert_or_assign(locked_document)
+
+    for deserialized_model, _report in deserialized_results:
+        deserialized_model.link(id_map)
+
+    syside.Sema().resolve(
+        documents_to_resolve,
+        env.index(),
+        env.lib,
+    )
 
     for (root_name, _document_json), (deserialized_model, _report) in zip(
-        _split_root_namespace_documents(json_flexo),
+        split_documents,
         deserialized_results,
     ):
         root_namespace = deserialized_model.document.root_node

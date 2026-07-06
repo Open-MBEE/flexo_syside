@@ -247,7 +247,9 @@ def convert_json_to_sysml_textual(
         )
 
         try:
-            deserialized_model, _ = syside.json.loads(json_import, "memory:///import.sysml")
+            _project_model, deserialized_results = syside.json.loads(
+                [("memory:///import.sysml", json_import)]
+            )
         except Exception as exc:
             try:
                 from syside.json import DeserializationError
@@ -271,10 +273,17 @@ def convert_json_to_sysml_textual(
         for warning in wlist:
             captured_warnings.append(str(warning.message))
 
+    deserialized_model, _ = deserialized_results[0]
+
+    env = syside.Environment.get_default()
     id_map = syside.IdMap()
-    for mutex in syside.Environment.get_default().documents:
+    for mutex in env.documents:
         with mutex.lock() as dep:
             id_map.insert_or_assign(dep)
+
+    documents_to_resolve = [deserialized_model.document]
+    with deserialized_model.document.mutex.lock() as locked_document:
+        id_map.insert_or_assign(locked_document)
 
     try:
         deserialized_model.link(id_map)
@@ -295,6 +304,12 @@ def convert_json_to_sysml_textual(
             print_serde_report(report)
         else:
             raise
+
+    syside.Sema().resolve(
+        documents_to_resolve,
+        env.index(),
+        env.lib,
+    )
 
     root_namespace = deserialized_model.document.root_node
     printer_cfg = syside.PrinterConfig(line_width=80, tab_width=2)

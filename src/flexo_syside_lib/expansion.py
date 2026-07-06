@@ -18,6 +18,45 @@ def _document_source_name(root_name: str) -> str:
     return root_name if root_name.endswith((".sysml", ".kerml")) else f"{root_name}.sysml"
 
 
+def _load_resolved_project_documents(
+    json_in: Any,
+) -> tuple[
+    list[tuple[str, str]],
+    list[tuple[Any, Any]],
+]:
+    from .core_multi_namespace import _split_root_namespace_documents
+
+    document_chunks = _split_root_namespace_documents(json_in)
+    document_sources = [
+        (f"memory:///{_document_source_name(root_name)}", chunk_json)
+        for root_name, chunk_json in document_chunks
+    ]
+    _project_model, deserialized_results = syside.json.loads(document_sources)
+
+    env = syside.Environment.get_default()
+    id_map = syside.IdMap()
+    for mutex in env.documents:
+        with mutex.lock() as dep:
+            id_map.insert_or_assign(dep)
+
+    documents_to_resolve = []
+    for deserialized_model, _report in deserialized_results:
+        documents_to_resolve.append(deserialized_model.document)
+        with deserialized_model.document.mutex.lock() as locked_document:
+            id_map.insert_or_assign(locked_document)
+
+    for deserialized_model, _report in deserialized_results:
+        deserialized_model.link(id_map)
+
+    syside.Sema().resolve(
+        documents_to_resolve,
+        env.index(),
+        env.lib,
+    )
+
+    return document_chunks, deserialized_results
+
+
 def expand_minimal_json_to_full_json(minimal_json: Any) -> tuple[list[dict[str, Any]], str]:
     """
     Expand minimal SysML JSON into the repository's current non-minimal JSON form.
@@ -125,36 +164,7 @@ def expand_minimal_json_to_full_json_model(
             f"minimal_json must be dict/list/str, got {type(minimal_json).__name__}"
         )
 
-    from .core_multi_namespace import _split_root_namespace_documents
-
-    document_chunks = _split_root_namespace_documents(json_in)
-    document_sources = [
-        (f"memory:///{_document_source_name(root_name)}", chunk_json)
-        for root_name, chunk_json in document_chunks
-    ]
-    _project_model, deserialized_results = syside.json.loads(document_sources)
-
-    env = syside.Environment.get_default()
-    id_map = syside.IdMap()
-    for mutex in env.documents:
-        with mutex.lock() as dep:
-            id_map.insert_or_assign(dep)
-
-    documents_to_resolve = []
-    for deserialized_model, _report in deserialized_results:
-        documents_to_resolve.append(deserialized_model.document)
-        with deserialized_model.document.mutex.lock() as locked_document:
-            id_map.insert_or_assign(locked_document)
-
-    for deserialized_model, _report in deserialized_results:
-        deserialized_model.link(id_map)
-
-    sema = syside.Sema()
-    sema.resolve(
-        documents_to_resolve,
-        env.index(),
-        env.lib,
-    )
+    document_chunks, deserialized_results = _load_resolved_project_documents(json_in)
 
     options = create_serialization_options()
     expanded_elements: list[dict[str, Any]] = []

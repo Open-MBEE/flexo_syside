@@ -12,13 +12,55 @@ from flexo_syside_lib.core import (
     expand_minimal_json_to_full_json,
     expand_minimal_json_to_full_json_model,
 )
+from flexo_syside_lib.core_multi_namespace import convert_json_to_sysml_textual_multi_namespace
 
 from conftest import (
     MULTI_NAMESPACE_DIR,
+    FIXTURES_DIR,
     canonical_namespace_models,
     canonicalize_json_elements,
     fixture_path,
+    normalize_roundtrip_sysml_text,
 )
+
+
+EXACT_MODEL_ROUNDTRIP_FIXTURES = [
+    "Drone2.sysml",
+    "geo.sysml",
+    "library.sysml",
+    "pu-simple.sysml",
+    "pu.sysml",
+    "Test1.sysml",
+    "Test2.sysml",
+    "Test3.sysml",
+    "Test4.sysml",
+    "Test6.sysml",
+]
+
+KNOWN_MODEL_ROUNDTRIP_LIMITATIONS = [
+    "Flashlight.sysml",
+    "Test5.sysml",
+    "Test7.sysml",
+]
+
+FULL_JSON_TEXT_STABLE_FIXTURES = [
+    "Drone2.sysml",
+    "Flashlight.sysml",
+    "geo.sysml",
+    "library.sysml",
+    "pu-simple.sysml",
+    "pu.sysml",
+    "Test1.sysml",
+    "Test2.sysml",
+    "Test3.sysml",
+    "Test4.sysml",
+    "Test6.sysml",
+]
+
+KNOWN_FULL_JSON_TEXT_REPARSE_LIMITATIONS = [
+    "Test5.sysml",
+    "Test7.sysml",
+]
 
 
 def test_serialize_deserialize_examples():
@@ -72,6 +114,44 @@ def test_serialize_deserialize_string_input():
     (sysml_text, model), warnings = convert_json_to_sysml_textual(data)
     del model, warnings
     assert sysml_text is not None
+
+
+def test_convert_json_to_sysml_textual_resolves_action_start_via_sema():
+    source = """
+        package FlashlightStarterModel {
+            package FlashlightSpecificationAndDesign {
+                package Actions {
+                    action produceDirectedLight {
+                        action provideDCPwr;
+                        action connectDCPwr;
+                        fork fork1;
+                        then provideDCPwr;
+                        then connectDCPwr;
+                        first start then fork1;
+                    }
+                }
+            }
+        }
+    """
+
+    _, raw_json_min = convert_sysml_string_textual_to_json(source, minimal=True)
+    result, warnings = convert_json_to_sysml_textual(raw_json_min)
+
+    assert result is not None
+    sysml_text, _model = result
+    assert "first start then fork1;" in sysml_text
+    assert "Actions::Action::start" not in sysml_text
+    assert not warnings
+
+
+def test_convert_json_to_sysml_textual_multi_namespace_avoids_external_ref_warnings():
+    source = "package P { private import ScalarValues::*; }"
+
+    _, raw_json_min = convert_sysml_string_textual_to_json(source, minimal=True)
+    namespace_models, warnings = convert_json_to_sysml_textual_multi_namespace(raw_json_min)
+
+    assert namespace_models
+    assert not warnings
 
 
 def test_convert_sysml_models_textual_to_json_matches_file_based_multi_conversion():
@@ -174,6 +254,121 @@ def test_expand_minimal_json_to_full_json_model_preserves_multi_root_filenames()
     )
 
 
+@pytest.mark.parametrize("fixture_name", EXACT_MODEL_ROUNDTRIP_FIXTURES)
+def test_expand_minimal_json_to_full_json_model_matches_direct_full_json(
+    fixture_name: str,
+):
+    model_file_path = FIXTURES_DIR / fixture_name
+
+    _, raw_json_full = convert_sysml_file_textual_to_json(model_file_path, minimal=False)
+    _, raw_json_min = convert_sysml_file_textual_to_json(model_file_path, minimal=True)
+    _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+    assert canonicalize_json_elements(raw_json_expanded) == canonicalize_json_elements(
+        raw_json_full
+    )
+
+
+def test_expand_minimal_json_to_full_json_model_matches_direct_full_json_for_simple_multi_root(
+    tmp_path,
+):
+    alpha_path = tmp_path / "model-alpha.sysml"
+    beta_path = tmp_path / "model-beta.sysml"
+
+    alpha_path.write_text("package Alpha { part def A; }\n", encoding="utf-8")
+    beta_path.write_text("package Beta { part def B; }\n", encoding="utf-8")
+
+    _, raw_json_full = convert_sysml_files_textual_to_json([alpha_path, beta_path], minimal=False)
+    _, raw_json_min = convert_sysml_files_textual_to_json([alpha_path, beta_path], minimal=True)
+    _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
+
+    assert canonicalize_json_elements(raw_json_expanded) == canonicalize_json_elements(
+        raw_json_full
+    )
+
+
+@pytest.mark.parametrize("fixture_name", FULL_JSON_TEXT_STABLE_FIXTURES)
+def test_full_json_roundtrip_text_stabilizes_for_single_file_models(fixture_name: str):
+    model_file_path = FIXTURES_DIR / fixture_name
+
+    _, raw_json_full = convert_sysml_file_textual_to_json(model_file_path, minimal=False)
+    first_result, first_warnings = convert_json_to_sysml_textual(raw_json_full)
+
+    assert first_result is not None
+    first_text, _first_model = first_result
+    assert first_text.strip()
+    assert not first_warnings
+
+    _, roundtrip_full_json = convert_sysml_string_textual_to_json(first_text, minimal=False)
+    second_result, second_warnings = convert_json_to_sysml_textual(roundtrip_full_json)
+
+    assert second_result is not None
+    second_text, _second_model = second_result
+    assert not second_warnings
+    assert normalize_roundtrip_sysml_text(first_text) == normalize_roundtrip_sysml_text(
+        second_text
+    )
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Some reconstructed full-JSON texts still fail reparsing due upstream "
+        "metadata-feature annotation issues."
+    ),
+    strict=True,
+)
+@pytest.mark.parametrize("fixture_name", KNOWN_FULL_JSON_TEXT_REPARSE_LIMITATIONS)
+def test_full_json_roundtrip_text_known_reparse_limitations(fixture_name: str):
+    model_file_path = FIXTURES_DIR / fixture_name
+
+    _, raw_json_full = convert_sysml_file_textual_to_json(model_file_path, minimal=False)
+    first_result, first_warnings = convert_json_to_sysml_textual(raw_json_full)
+
+    assert first_result is not None
+    first_text, _first_model = first_result
+    assert first_text.strip()
+    assert not first_warnings
+
+    _, roundtrip_full_json = convert_sysml_string_textual_to_json(first_text, minimal=False)
+    second_result, second_warnings = convert_json_to_sysml_textual(roundtrip_full_json)
+
+    assert second_result is not None
+    second_text, _second_model = second_result
+    assert not second_warnings
+    assert normalize_roundtrip_sysml_text(first_text) == normalize_roundtrip_sysml_text(
+        second_text
+    )
+
+
+def test_full_json_roundtrip_text_stabilizes_for_multi_file_model_set():
+    model_file_paths = [
+        MULTI_NAMESPACE_DIR / "FlashlightStarterModel.sysml",
+        MULTI_NAMESPACE_DIR / "FlashlightContextClassExercise.sysml",
+        MULTI_NAMESPACE_DIR / "GeneralConcepts.sysml",
+    ]
+
+    _, raw_json_full = convert_sysml_files_textual_to_json(model_file_paths, minimal=False)
+    first_models, first_warnings = convert_json_to_sysml_textual_multi_namespace(raw_json_full)
+
+    assert first_models
+    assert not first_warnings
+
+    _, roundtrip_full_json = convert_sysml_models_textual_to_json(first_models, minimal=False)
+    second_models, second_warnings = convert_json_to_sysml_textual_multi_namespace(
+        roundtrip_full_json
+    )
+
+    assert second_models
+    assert not second_warnings
+    assert {
+        namespace_name: normalize_roundtrip_sysml_text(sysml_text)
+        for namespace_name, sysml_text in first_models
+    } == {
+        namespace_name: normalize_roundtrip_sysml_text(sysml_text)
+        for namespace_name, sysml_text in second_models
+    }
+
+
 def test_flashlight_single_min_json_roundtrip_text_identity():
     model_file_path = fixture_path("Flashlight.sysml")
     _, raw_json_full = convert_sysml_file_textual_to_json(model_file_path, minimal=False)
@@ -238,25 +433,28 @@ def test_flashlight_single_full_json_matches_expanded_json_textually():
 
 @pytest.mark.xfail(
     reason=(
-        "expand_minimal_json_to_full_json_model() currently recreates the "
-        "Flashlight model textually but does not produce byte-equivalent "
-        "full JSON compared to direct textual serialization."
+        "Sensmetry still reports non-identical derived relationship bindings "
+        "for some reconstructed models with external/library references."
     ),
     strict=True,
 )
-def test_flashlight_single_expand_model_full_json_matches_direct_full_json():
-    model_file_path = fixture_path("Flashlight.sysml")
+@pytest.mark.parametrize("fixture_name", KNOWN_MODEL_ROUNDTRIP_LIMITATIONS)
+def test_expand_minimal_json_to_full_json_model_known_single_file_limitations(
+    fixture_name: str,
+):
+    model_file_path = FIXTURES_DIR / fixture_name
     _, raw_json_full = convert_sysml_file_textual_to_json(model_file_path, minimal=False)
     _, raw_json_min = convert_sysml_file_textual_to_json(model_file_path, minimal=True)
     _, raw_json_expanded = expand_minimal_json_to_full_json_model(raw_json_min)
-    assert canonicalize_json_elements(raw_json_expanded) == canonicalize_json_elements(raw_json_full)
+    assert canonicalize_json_elements(raw_json_expanded) == canonicalize_json_elements(
+        raw_json_full
+    )
 
 
 @pytest.mark.xfail(
     reason=(
-        "expand_minimal_json_to_full_json_model() currently recreates the "
-        "multi-file Flashlight model textually but does not produce "
-        "byte-equivalent full JSON compared to direct textual serialization."
+        "Sensmetry still reports non-identical derived relationship bindings "
+        "for some reconstructed multi-file models with external/library references."
     ),
     strict=True,
 )

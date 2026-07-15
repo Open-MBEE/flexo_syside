@@ -8,6 +8,7 @@ from flexo_syside_lib.core import (
     _create_serialization_options,
     convert_sysml_file_textual_to_json,
     convert_sysml_files_textual_to_json,
+    convert_sysml_models_textual_to_json,
     convert_sysml_string_textual_to_json,
     expand_minimal_json_to_full_json,
 )
@@ -159,6 +160,49 @@ def test_convert_sysml_files_to_json(mock_syside):
     ] == ["alpha.sysml", "beta.sysml"]
     assert isinstance(payload, list)
     assert len(payload) == 4
+
+
+@patch("flexo_syside_lib.serde.syside")
+def test_convert_sysml_models_to_json_uses_environment_models(mock_syside):
+    env_model = Mock()
+    env_model.to_environment.return_value = "ENV"
+    env_diags = Mock()
+    env_diags.contains_errors.return_value = False
+
+    main_model = Mock()
+    main_diags = Mock()
+    main_diags.contains_errors.return_value = False
+    main_model.user_docs = [Mock()]
+    locked = Mock()
+    locked.root_node = Mock()
+    context_manager = Mock()
+    context_manager.__enter__ = Mock(return_value=locked)
+    context_manager.__exit__ = Mock(return_value=None)
+    main_model.user_docs[0].lock.return_value = context_manager
+
+    mock_syside.try_load_model.side_effect = [
+        (env_model, env_diags),
+        (main_model, main_diags),
+    ]
+
+    writer = Mock()
+    writer.result = json.dumps(
+        [{"@id": "ns1", "@type": "Namespace", "qualifiedName": "alpha.sysml"}]
+    )
+    options = Mock()
+
+    with patch("flexo_syside_lib.serde.create_json_writer", return_value=writer), patch(
+        "flexo_syside_lib.serde.create_serialization_options", return_value=options
+    ), patch("flexo_syside_lib.serde.syside.serialize"):
+        payload, json_string = convert_sysml_models_textual_to_json(
+            [("alpha.sysml", "package Alpha;")],
+            environment_models=[("lib.sysml", "library package Lib; end;")],
+        )
+
+    assert isinstance(payload, list)
+    assert json.loads(json_string)[0]["qualifiedName"] == "alpha.sysml"
+    assert mock_syside.try_load_model.call_count == 2
+    assert mock_syside.try_load_model.call_args_list[1].kwargs["environment"] == "ENV"
 
 
 @patch("flexo_syside_lib.serde.syside")

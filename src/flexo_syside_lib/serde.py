@@ -83,6 +83,39 @@ def create_serialization_options() -> syside.SerializationOptions:
     return options
 
 
+def _write_models_to_temp_paths(
+    tmp_dir: str,
+    sysml_models: list[tuple[str, str]],
+) -> tuple[list[str], list[str]]:
+    basenames = [Path(filename).name for filename, _text in sysml_models]
+    if len(set(basenames)) != len(basenames):
+        raise ValueError("sysml_models filenames must be unique after basename normalization")
+
+    temp_paths: list[str] = []
+    for index, (filename, sysml_text) in enumerate(sysml_models):
+        basename = Path(filename).name
+        suffix = Path(basename).suffix.lower()
+        if suffix not in {".sysml", ".kerml", ".syml"}:
+            suffix = ".sysml"
+        temp_path = Path(tmp_dir) / f"{index:04d}_{Path(basename).stem}{suffix}"
+        temp_path.write_text(sysml_text, encoding="utf-8")
+        temp_paths.append(os.fspath(temp_path))
+    return basenames, temp_paths
+
+
+def _build_environment_from_models(
+    environment_models: list[tuple[str, str]] | None,
+) -> Any:
+    if not environment_models:
+        return None
+
+    with tempfile.TemporaryDirectory(prefix="flexo_syside_env_") as env_dir:
+        _basenames, env_paths = _write_models_to_temp_paths(env_dir, environment_models)
+        model, diagnostics = syside.try_load_model(env_paths)
+        assert not diagnostics.contains_errors(warnings_as_errors=True)
+        return model.to_environment() if model is not None and hasattr(model, "to_environment") else None
+
+
 def model_to_json(
     model: syside.Model,
     minimal: bool = False,
@@ -169,25 +202,15 @@ def convert_sysml_models_textual_to_json(
     sysml_models: list[tuple[str, str]],
     json_out_path: str | None = None,
     minimal: bool = False,
+    environment_models: list[tuple[str, str]] | None = None,
 ) -> tuple[list[dict[str, Any]], str]:
     if not sysml_models:
         raise ValueError("sysml_models must not be empty")
 
-    basenames = [Path(filename).name for filename, _text in sysml_models]
-    if len(set(basenames)) != len(basenames):
-        raise ValueError("sysml_models filenames must be unique after basename normalization")
-
     with tempfile.TemporaryDirectory(prefix="flexo_syside_models_") as tmp_dir:
-        temp_paths: list[str] = []
-        for index, (filename, sysml_text) in enumerate(sysml_models):
-            basename = Path(filename).name
-            suffix = Path(basename).suffix.lower()
-            if suffix not in {".sysml", ".kerml"}:
-                suffix = ".sysml"
-            temp_path = Path(tmp_dir) / f"{index:04d}_{Path(basename).stem}{suffix}"
-            temp_path.write_text(sysml_text, encoding="utf-8")
-            temp_paths.append(os.fspath(temp_path))
-        model, diagnostics = syside.try_load_model(temp_paths)
+        basenames, temp_paths = _write_models_to_temp_paths(tmp_dir, sysml_models)
+        environment = _build_environment_from_models(environment_models)
+        model, diagnostics = syside.try_load_model(temp_paths, environment=environment)
         assert not diagnostics.contains_errors(warnings_as_errors=True)
 
         json_string = model_to_json(

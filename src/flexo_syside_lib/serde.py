@@ -88,16 +88,25 @@ def _write_models_to_temp_paths(
     sysml_models: list[tuple[str, str]],
 ) -> tuple[list[str], list[str]]:
     basenames = [Path(filename).name for filename, _text in sysml_models]
-    if len(set(basenames)) != len(basenames):
-        raise ValueError("sysml_models filenames must be unique after basename normalization")
-
     temp_paths: list[str] = []
+    used_paths: set[str] = set()
     for index, (filename, sysml_text) in enumerate(sysml_models):
-        basename = Path(filename).name
+        relative_path = Path(str(filename or "").replace("\\", "/"))
+        parts = [part for part in relative_path.parts if part not in {"", ".", ".."}]
+        basename = parts[-1] if parts else f"model-{index + 1}.sysml"
         suffix = Path(basename).suffix.lower()
         if suffix not in {".sysml", ".kerml", ".syml"}:
             suffix = ".sysml"
-        temp_path = Path(tmp_dir) / f"{index:04d}_{Path(basename).stem}{suffix}"
+        stem = Path(basename).stem or f"model-{index + 1}"
+        rel_parts = [f"{index:04d}"]
+        if len(parts) > 1:
+            rel_parts.extend(parts[:-1])
+        rel_parts.append(f"{stem}{suffix}")
+        temp_path = Path(tmp_dir).joinpath(*rel_parts)
+        while os.fspath(temp_path) in used_paths:
+            temp_path = temp_path.with_name(f"{temp_path.stem}-{index + 1}{temp_path.suffix}")
+        used_paths.add(os.fspath(temp_path))
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path.write_text(sysml_text, encoding="utf-8")
         temp_paths.append(os.fspath(temp_path))
     return basenames, temp_paths

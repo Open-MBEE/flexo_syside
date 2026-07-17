@@ -206,6 +206,55 @@ def test_convert_sysml_models_to_json_uses_environment_models(mock_syside):
 
 
 @patch("flexo_syside_lib.serde.syside")
+def test_convert_sysml_models_to_json_allows_duplicate_basenames_in_environment(mock_syside):
+    env_model = Mock()
+    env_model.to_environment.return_value = "ENV"
+    env_diags = Mock()
+    env_diags.contains_errors.return_value = False
+
+    main_model = Mock()
+    main_diags = Mock()
+    main_diags.contains_errors.return_value = False
+    main_model.user_docs = [Mock()]
+    locked = Mock()
+    locked.root_node = Mock()
+    context_manager = Mock()
+    context_manager.__enter__ = Mock(return_value=locked)
+    context_manager.__exit__ = Mock(return_value=None)
+    main_model.user_docs[0].lock.return_value = context_manager
+
+    mock_syside.try_load_model.side_effect = [
+        (env_model, env_diags),
+        (main_model, main_diags),
+    ]
+
+    writer = Mock()
+    writer.result = json.dumps(
+        [{"@id": "ns1", "@type": "Namespace", "qualifiedName": "alpha.sysml"}]
+    )
+    options = Mock()
+
+    with patch("flexo_syside_lib.serde.create_json_writer", return_value=writer), patch(
+        "flexo_syside_lib.serde.create_serialization_options", return_value=options
+    ), patch("flexo_syside_lib.serde.syside.serialize"):
+        payload, json_string = convert_sysml_models_textual_to_json(
+            [("workspace/alpha.sysml", "package Alpha;")],
+            environment_models=[
+                ("LibA/root/package.sysml", "library package LibA; end;"),
+                ("LibB/root/package.sysml", "library package LibB; end;"),
+            ],
+        )
+
+    assert isinstance(payload, list)
+    assert json.loads(json_string)[0]["qualifiedName"] == "alpha.sysml"
+    env_call_paths = mock_syside.try_load_model.call_args_list[0].args[0]
+    assert len(env_call_paths) == 2
+    assert env_call_paths[0] != env_call_paths[1]
+    assert env_call_paths[0].endswith("LibA\\root\\package.sysml") or env_call_paths[0].endswith("LibA/root/package.sysml")
+    assert env_call_paths[1].endswith("LibB\\root\\package.sysml") or env_call_paths[1].endswith("LibB/root/package.sysml")
+
+
+@patch("flexo_syside_lib.serde.syside")
 def test_create_json_writer(mock_syside):
     mock_writer_class = Mock()
     mock_writer_instance = Mock()

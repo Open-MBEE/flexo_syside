@@ -3,6 +3,8 @@ import os
 import tempfile
 from unittest.mock import Mock, patch
 
+import pytest
+
 from flexo_syside_lib.core import (
     _create_json_writer,
     _create_serialization_options,
@@ -252,6 +254,43 @@ def test_convert_sysml_models_to_json_allows_duplicate_basenames_in_environment(
     assert env_call_paths[0] != env_call_paths[1]
     assert env_call_paths[0].endswith("LibA\\root\\package.sysml") or env_call_paths[0].endswith("LibA/root/package.sysml")
     assert env_call_paths[1].endswith("LibB\\root\\package.sysml") or env_call_paths[1].endswith("LibB/root/package.sysml")
+
+
+@patch("flexo_syside_lib.serde.syside")
+def test_convert_sysml_models_to_json_surfaces_diagnostics_in_assertion(mock_syside):
+    env_model = Mock()
+    env_model.to_environment.return_value = "ENV"
+    env_diags = Mock()
+    env_diags.contains_errors.return_value = False
+
+    failure_diag = Mock()
+    failure_diag.message = "Couldn't resolve import Demo::Library"
+    failure_diag.severity = "error"
+    failure_diag.file = "/tmp/0000_workspace/test.sysml"
+    failure_diag.line = 7
+    failure_diag.col = 3
+
+    main_diags = Mock()
+    main_diags.contains_errors.return_value = True
+    main_diags.all = [failure_diag]
+
+    mock_syside.try_load_model.side_effect = [
+        (env_model, env_diags),
+        (Mock(), main_diags),
+    ]
+
+    with pytest.raises(AssertionError) as excinfo:
+        convert_sysml_models_textual_to_json(
+            [("workspace/test.sysml", "package Test;")],
+            environment_models=[("Demo/root/library.sysml", "library package Demo; end;")],
+        )
+
+    message = str(excinfo.value)
+    assert "textual models load failed" in message
+    assert "Couldn't resolve import Demo::Library" in message
+    assert "workspace/test.sysml" in message
+    assert "0000_workspace" in message
+    assert "flexo_syside_lib" in message
 
 
 @patch("flexo_syside_lib.serde.syside")

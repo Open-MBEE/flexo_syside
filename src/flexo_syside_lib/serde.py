@@ -5,6 +5,7 @@ import os
 import tempfile
 import warnings
 from datetime import datetime, timezone
+from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,11 @@ import syside
 
 from .payload import ELEMENT_TYPE_KEY, wrap_elements_as_payload
 from .utils2 import print_serde_report
+
+try:
+    _PACKAGE_VERSION = package_version("flexo_syside_lib")
+except PackageNotFoundError:
+    _PACKAGE_VERSION = "unknown"
 
 
 def make_root_namespace_first_legacy(json_str: str) -> str:
@@ -121,8 +127,63 @@ def _build_environment_from_models(
     with tempfile.TemporaryDirectory(prefix="flexo_syside_env_") as env_dir:
         _basenames, env_paths = _write_models_to_temp_paths(env_dir, environment_models)
         model, diagnostics = syside.try_load_model(env_paths)
-        assert not diagnostics.contains_errors(warnings_as_errors=True)
+        _assert_no_diagnostic_errors(
+            diagnostics,
+            context="environment model load",
+            input_names=[name for name, _text in environment_models],
+            staged_paths=env_paths,
+        )
         return model.to_environment() if model is not None and hasattr(model, "to_environment") else None
+
+
+def _format_diagnostic_entry(diag: Any) -> str:
+    message = str(getattr(diag, "message", None) or getattr(diag, "text", None) or diag).strip()
+    severity = getattr(diag, "severity", None) or getattr(diag, "level", None)
+    severity_name = str(getattr(severity, "name", severity) or "unknown").lower()
+
+    file_path = str(
+        getattr(diag, "file", None)
+        or getattr(getattr(diag, "location", None), "file", None)
+        or getattr(getattr(diag, "location", None), "resource", None)
+        or ""
+    ).strip()
+    line = getattr(diag, "line", None)
+    col = getattr(diag, "col", None)
+
+    location = file_path
+    if line is not None:
+        location = f"{location}:{line}" if location else str(line)
+        if col is not None:
+            location = f"{location}:{col}"
+    if location:
+        return f"[{severity_name}] {location} {message}".strip()
+    return f"[{severity_name}] {message}".strip()
+
+
+def _assert_no_diagnostic_errors(
+    diagnostics: Any,
+    *,
+    context: str,
+    input_names: list[str],
+    staged_paths: list[str],
+) -> None:
+    if not diagnostics.contains_errors(warnings_as_errors=True):
+        return
+
+    all_diagnostics = list(getattr(diagnostics, "all", []) or [])
+    lines = [
+        f"flexo_syside_lib { _PACKAGE_VERSION } {context} failed with {len(all_diagnostics)} diagnostic(s)",
+        f"input_names={input_names}",
+        f"staged_paths={staged_paths}",
+    ]
+    if not all_diagnostics:
+        lines.append("diagnostics=[]")
+    else:
+        lines.append("diagnostics:")
+        lines.extend(f"- {_format_diagnostic_entry(diag)}" for diag in all_diagnostics[:20])
+        if len(all_diagnostics) > 20:
+            lines.append(f"- ... {len(all_diagnostics) - 20} more diagnostic(s)")
+    raise AssertionError("\n".join(lines))
 
 
 def model_to_json(
@@ -171,7 +232,12 @@ def convert_sysml_file_textual_to_json(
     minimal: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
     model, diagnostics = syside.try_load_model([sysml_file_path])
-    assert not diagnostics.contains_errors(warnings_as_errors=True)
+    _assert_no_diagnostic_errors(
+        diagnostics,
+        context="single-file model load",
+        input_names=[Path(sysml_file_path).name],
+        staged_paths=[sysml_file_path],
+    )
 
     json_string = model_to_json(
         model,
@@ -192,7 +258,12 @@ def convert_sysml_files_textual_to_json(
     minimal: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
     model, diagnostics = syside.try_load_model(sysml_file_paths)
-    assert not diagnostics.contains_errors(warnings_as_errors=True)
+    _assert_no_diagnostic_errors(
+        diagnostics,
+        context="multi-file model load",
+        input_names=[Path(sysml_file_path).name for sysml_file_path in sysml_file_paths],
+        staged_paths=sysml_file_paths,
+    )
 
     json_string = model_to_json(
         model,
@@ -220,7 +291,12 @@ def convert_sysml_models_textual_to_json(
         basenames, temp_paths = _write_models_to_temp_paths(tmp_dir, sysml_models)
         environment = _build_environment_from_models(environment_models)
         model, diagnostics = syside.try_load_model(temp_paths, environment=environment)
-        assert not diagnostics.contains_errors(warnings_as_errors=True)
+        _assert_no_diagnostic_errors(
+            diagnostics,
+            context="textual models load",
+            input_names=[name for name, _text in sysml_models],
+            staged_paths=temp_paths,
+        )
 
         json_string = model_to_json(
             model,
@@ -241,7 +317,12 @@ def convert_sysml_string_textual_to_json(
     minimal: bool = False,
 ) -> tuple[list[dict[str, Any]], str]:
     model, diagnostics = syside.load_model(sysml_source=sysml_model_string)
-    assert not diagnostics.contains_errors(warnings_as_errors=True)
+    _assert_no_diagnostic_errors(
+        diagnostics,
+        context="string model load",
+        input_names=["<string>"],
+        staged_paths=["<memory>"],
+    )
 
     json_string = model_to_json(model, minimal)
     if json_out_path is not None:

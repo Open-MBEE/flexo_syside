@@ -68,7 +68,7 @@ def test_package_root_exports_conversion_helpers():
     assert callable(flexo_syside_lib.convert_sysml_string_textual_to_json)
     assert callable(flexo_syside_lib.convert_json_to_sysml_textual)
     assert callable(flexo_syside_lib.expand_minimal_json_to_full_json)
-    assert flexo_syside_lib.__version__ == "0.4.0"
+    assert flexo_syside_lib.__version__ == "0.4.1"
 
 
 def test_convert_json_to_sysml_textual_invalid_input():

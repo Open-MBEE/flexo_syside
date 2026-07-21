@@ -1,11 +1,53 @@
 import json
+import tempfile
 import warnings
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import syside
 
 from .payload import ELEMENT_TYPE_KEY
 from .utils2 import print_serde_report
+
+
+def _write_environment_models(
+    tmp_dir: str,
+    environment_models: List[Tuple[str, str]],
+) -> List[str]:
+    temp_paths: List[str] = []
+    for index, (filename, sysml_text) in enumerate(environment_models):
+        relative_path = Path(str(filename or "").replace("\\", "/"))
+        parts = [part for part in relative_path.parts if part not in {"", ".", ".."}]
+        basename = parts[-1] if parts else f"model-{index + 1}.sysml"
+        suffix = Path(basename).suffix.lower()
+        if suffix not in {".sysml", ".kerml", ".syml"}:
+            suffix = ".sysml"
+        stem = Path(basename).stem or f"model-{index + 1}"
+        rel_parts = [f"{index:04d}"]
+        if len(parts) > 1:
+            rel_parts.extend(parts[:-1])
+        rel_parts.append(f"{stem}{suffix}")
+        temp_path = Path(tmp_dir).joinpath(*rel_parts)
+        temp_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_path.write_text(sysml_text, encoding="utf-8")
+        temp_paths.append(str(temp_path))
+    return temp_paths
+
+
+def _resolve_environment(environment_models: List[Tuple[str, str]] | None) -> Any:
+    if not environment_models:
+        return syside.Environment.get_default()
+
+    with tempfile.TemporaryDirectory(prefix="flexo_syside_json_env_") as env_dir:
+        env_paths = _write_environment_models(env_dir, environment_models)
+        model, diagnostics = syside.try_load_model(env_paths)
+        if diagnostics.contains_errors(warnings_as_errors=True):
+            raise AssertionError(
+                "environment model load failed for JSON-to-SysML conversion"
+            )
+        if model is None or not hasattr(model, "to_environment"):
+            return syside.Environment.get_default()
+        return model.to_environment()
 
 
 def _normalize_json_input(json_flexo: Any) -> List[Dict[str, Any]]:
@@ -311,8 +353,12 @@ def _split_root_namespace_documents(
     return documents
 
 
-def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]]:
+def _deserialize_json_to_sysml_textual(
+    json_import: str,
+    environment_models: List[Tuple[str, str]] | None = None,
+) -> Tuple[str, List[str]]:
     captured_warnings: List[str] = []
+    env = _resolve_environment(environment_models)
 
     with warnings.catch_warnings(record=True) as wlist:
         warnings.simplefilter("always")
@@ -340,9 +386,11 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
             captured_warnings.append(str(warning.message))
 
     id_map = syside.IdMap()
-    for mutex in syside.Environment.get_default().documents:
+    for mutex in env.documents:
         with mutex.lock() as dep:
             id_map.insert_or_assign(dep)
+    with deserialized_model.document.mutex.lock() as locked_document:
+        id_map.insert_or_assign(locked_document)
 
     try:
         deserialized_model.link(id_map)
@@ -361,6 +409,13 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
         else:
             raise
 
+    sema = syside.Sema()
+    sema.resolve(
+        [deserialized_model.document],
+        env.index(),
+        env.lib,
+    )
+
     root_namespace = deserialized_model.document.root_node
     printer_cfg = syside.PrinterConfig(line_width=80, tab_width=2)
     printer = syside.ModelPrinter.sysml()
@@ -370,6 +425,7 @@ def _deserialize_json_to_sysml_textual(json_import: str) -> Tuple[str, List[str]
 
 def _deserialize_json_project_to_sysml_textual(
     json_flexo: Any,
+    environment_models: List[Tuple[str, str]] | None = None,
 ) -> Tuple[List[Tuple[str, str]], List[str]]:
     document_sources = [
         (f"memory:///{root_name}", document_json)
@@ -378,6 +434,7 @@ def _deserialize_json_project_to_sysml_textual(
 
     captured_warnings: List[str] = []
     results: List[Tuple[str, str]] = []
+    env = _resolve_environment(environment_models)
 
     with warnings.catch_warnings(record=True) as wlist:
         warnings.simplefilter("always")
@@ -387,6 +444,27 @@ def _deserialize_json_project_to_sysml_textual(
             captured_warnings.append(str(warning.message))
 
     del project_model
+
+    id_map = syside.IdMap()
+    for mutex in env.documents:
+        with mutex.lock() as dep:
+            id_map.insert_or_assign(dep)
+
+    documents_to_resolve = []
+    for deserialized_model, _report in deserialized_results:
+        documents_to_resolve.append(deserialized_model.document)
+        with deserialized_model.document.mutex.lock() as locked_document:
+            id_map.insert_or_assign(locked_document)
+
+    for deserialized_model, _report in deserialized_results:
+        deserialized_model.link(id_map)
+
+    sema = syside.Sema()
+    sema.resolve(
+        documents_to_resolve,
+        env.index(),
+        env.lib,
+    )
 
     for (root_name, _document_json), (deserialized_model, _report) in zip(
         _split_root_namespace_documents(json_flexo),
@@ -402,12 +480,17 @@ def _deserialize_json_project_to_sysml_textual(
 
 
 def convert_json_to_sysml_textual_multi_namespace(
-    json_flexo: Any, debug: bool = False
+    json_flexo: Any,
+    debug: bool = False,
+    environment_models: List[Tuple[str, str]] | None = None,
 ) -> Tuple[List[Tuple[str, str]], List[str]]:
     del debug
 
     if len(find_root_namespaces(json_flexo)) > 1:
-        return _deserialize_json_project_to_sysml_textual(json_flexo)
+        return _deserialize_json_project_to_sysml_textual(
+            json_flexo,
+            environment_models,
+        )
 
     results: List[Tuple[str, str]] = []
     captured_warnings: List[str] = []
@@ -415,7 +498,10 @@ def convert_json_to_sysml_textual_multi_namespace(
     for root_index, root_namespace in find_root_namespaces(json_flexo):
         root_name = _root_namespace_name(root_namespace)
         json_import = make_root_namespace_first(json_flexo, root_index)
-        sysml_text, warnings_for_root = _deserialize_json_to_sysml_textual(json_import)
+        sysml_text, warnings_for_root = _deserialize_json_to_sysml_textual(
+            json_import,
+            environment_models,
+        )
         captured_warnings.extend(
             f"[{root_name}] {warning}" for warning in warnings_for_root
         )

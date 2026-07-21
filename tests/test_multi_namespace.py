@@ -159,6 +159,10 @@ def test_convert_json_to_sysml_textual_multi_namespace_returns_tuple_per_root(mo
                 first = json.loads(src)[0]
                 model = Mock()
                 model.document.root_node = first
+                doc_ctx = Mock()
+                doc_ctx.__enter__ = Mock(return_value=Mock())
+                doc_ctx.__exit__ = Mock(return_value=None)
+                model.document.mutex.lock.return_value = doc_ctx
                 results.append((model, Mock()))
             return Mock(), results
 
@@ -166,6 +170,10 @@ def test_convert_json_to_sysml_textual_multi_namespace_returns_tuple_per_root(mo
         model = Mock()
         model.link.return_value = (Mock(), True)
         model.document.root_node = first
+        doc_ctx = Mock()
+        doc_ctx.__enter__ = Mock(return_value=Mock())
+        doc_ctx.__exit__ = Mock(return_value=None)
+        model.document.mutex.lock.return_value = doc_ctx
         return model, Mock()
 
     mock_syside.json.loads.side_effect = fake_loads
